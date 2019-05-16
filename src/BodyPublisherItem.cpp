@@ -1,5 +1,9 @@
 #include "BodyPublisherItem.h"
 #include <cnoid/BodyItem>
+#include <cnoid/BasicSensorSimulationHelper>
+#include <cnoid/Body>
+#include <cnoid/Device>
+#include <cnoid/DeviceList>
 #include <cnoid/Camera>
 #include <cnoid/ItemManager>
 #include <cnoid/TimeBar>
@@ -8,6 +12,7 @@
 #include <ros/node_handle.h>
 #include <sensor_msgs/JointState.h>
 #include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/Imu.h>
 #include <image_transport/image_transport.h>
 #include <memory>
 #include "gettext.h"
@@ -52,6 +57,14 @@ public:
     void initializeJointState(Body* body);
     void publishJointState(Body* body, double time);
     void publishCameraImage(int index);
+
+    DeviceList<RateGyroSensor> gyroSensors;
+    DeviceList<AccelerationSensor> accelSensors;
+
+    vector<ros::Publisher> gyroPublishers;
+    vector<ros::Publisher> accelPublishers;
+    void publishGyro(int index);
+    void publishAccel(int index);
 };
 
 }
@@ -247,6 +260,21 @@ BodyNode::BodyNode(BodyItem* bodyItem)
         auto camera = cameras[i];
         cameraImagePublishers[i] = it.advertise(camera->name() + "/image", 1);
     }
+
+    gyroSensors.assign(devices.extract<RateGyroSensor> ());
+    gyroPublishers.resize(gyroSensors.size());
+    for(size_t i = 0; i < gyroSensors.size(); ++i) {
+        auto gyro = gyroSensors[i];
+        std::string name = gyro->name();
+        gyroPublishers[i] = rosNode->advertise<sensor_msgs::Imu>(name, 1);
+    }
+    accelSensors.assign(devices.extract<AccelerationSensor> ());
+    accelPublishers.resize(accelSensors.size());
+    for(size_t i = 0; i < accelSensors.size(); ++i) {
+        auto accel = accelSensors[i];
+        std::string name = accel->name();
+        accelPublishers[i] = rosNode->advertise<sensor_msgs::Imu>(name, 1);
+    }
 }
 
 
@@ -270,6 +298,22 @@ void BodyNode::start(ControllerIO* io, double maxPublishRate)
         sensorConnections.add(
             camera->sigStateChanged().connect(
                 [&, i](){ publishCameraImage(i); }));
+    }
+
+    gyroSensors.assign(devices.extract<RateGyroSensor> ());
+    for(size_t i=0; i < gyroSensors.size(); ++i){
+      auto gyro = gyroSensors[i];
+        sensorConnections.add(
+            gyro->sigStateChanged().connect(
+                [&, i](){ publishGyro(i); }));
+    }
+
+    accelSensors.assign(devices.extract<AccelerationSensor> ());
+    for(size_t i=0; i < accelSensors.size(); ++i){
+      auto accel = accelSensors[i];
+        sensorConnections.add(
+            accel->sigStateChanged().connect(
+                [&, i](){ publishAccel(i); }));
     }
 }
 
@@ -370,4 +414,32 @@ void BodyNode::publishCameraImage(int index)
     image.data.resize(image.step * image.height);
     std::memcpy(&(image.data[0]), &(camera->image().pixels()[0]), image.step * image.height);
     cameraImagePublishers[index].publish(image);
+}
+
+void BodyNode::publishGyro(int index)
+{
+  auto gyro = gyroSensors[index];
+
+  sensor_msgs::Imu msg;
+  msg.header.stamp.fromSec(time);
+  msg.header.frame_id = gyro->name();
+  msg.angular_velocity.x = gyro->w()[0];
+  msg.angular_velocity.y = gyro->w()[1];
+  msg.angular_velocity.z = gyro->w()[2];
+
+  gyroPublishers[index].publish(msg);
+}
+
+void BodyNode::publishAccel(int index)
+{
+  auto accel = accelSensors[index];
+
+  sensor_msgs::Imu msg;
+  msg.header.stamp.fromSec(time);
+  msg.header.frame_id = accel->name();
+  msg.linear_acceleration.x = accel->dv()[0];
+  msg.linear_acceleration.y = accel->dv()[1];
+  msg.linear_acceleration.z = accel->dv()[2];
+
+  accelPublishers[index].publish(msg);
 }
