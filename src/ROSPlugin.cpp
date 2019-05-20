@@ -21,9 +21,10 @@ public:
     {
         int argc = 0;
         char** argv = 0;
-
+        bool primary_plugin = false;
         if(!ros::isInitialized()){
             ros::init(argc, argv, "choreonoid", ros::init_options::NoSigintHandler);
+            primary_plugin = true;
         }
 
         if(!ros::master::check()){
@@ -36,6 +37,7 @@ public:
         spinner->start();
 
         BodyPublisherItem::initialize(this);
+        
         return true;
     }
 

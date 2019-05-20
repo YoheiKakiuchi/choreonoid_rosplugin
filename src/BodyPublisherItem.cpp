@@ -71,6 +71,8 @@ public:
     void publishAccel(int index);
 
     //
+    bool publish_clock;
+    unsigned long clock_counter;
     ros::Publisher clock_pub;
     // ros control
     cnoid_robot_hardware::CnoidRobotHW *cnoid_hw_;
@@ -286,9 +288,24 @@ BodyNode::BodyNode(BodyItem* bodyItem)
         accelPublishers[i] = rosNode->advertise<sensor_msgs::Imu>(name, 1);
     }
 
-    /// clock
-    clock_pub = rosNode->advertise<rosgraph_msgs::Clock>("/clock", 5);
-    /// trajectory
+    bool published_clock = false;
+    std::vector<std::string> topics;
+    ros::this_node::getAdvertisedTopics(topics);
+    for (auto tp = topics.begin(); tp != topics.end(); tp++) {
+      //ROS_ERROR("tp: %s", tp->c_str());
+      if (*tp == "/clock") {
+        published_clock = true;
+      }
+    }
+    publish_clock = false;
+    clock_counter = 0;
+    if (!published_clock) {
+      ROS_ERROR("publish /clock");
+      /// clock
+      publish_clock = true;
+      clock_pub = rosNode->advertise<rosgraph_msgs::Clock>("/clock", 5);
+      /// trajectory
+    }
     cnoid_hw_ = new cnoid_robot_hardware::CnoidRobotHW();
     cnoid_hw_->cnoid_body = bodyItem->body();
     //ros::NodeHandle nh;
@@ -360,17 +377,20 @@ void BodyNode::control()
     ros::Time now(time);
     ros::Duration period(timeStep);
 
-    // clock pub
-    rosgraph_msgs::Clock clock_msg;
-    clock_msg.clock = now;
-    clock_pub.publish(clock_msg);
-
+    if (publish_clock && clock_counter % 5 == 0) {
+      // clock pub
+      rosgraph_msgs::Clock clock_msg;
+      clock_msg.clock = now;
+      clock_pub.publish(clock_msg);
+    }
     //
     cnoid_hw_->read(now, period);
     // read q from choreonoid
     ros_cm_->update(now, period);
     // write tau to choreonoid
     cnoid_hw_->write(now, period);
+
+    clock_counter++;
 }
 
 
