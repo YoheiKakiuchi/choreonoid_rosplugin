@@ -5,11 +5,12 @@ cnoid_make_gettext_mofiles(${target} mofiles)
 add_cnoid_plugin(${target} SHARED
   ROSPlugin.cpp
   BodyPublisherItem.cpp
+  cnoid_robot_hardware.cpp
   ${mofiles}
   )
 
 target_link_libraries(${target}
-  #${catkin_LIBRARIES}
+  ${catkin_LIBRARIES}
   ${roscpp_LIBRARIES}
   ${std_msgs_LIBRARIES}
   ${sensor_msgs_LIBRARIES}

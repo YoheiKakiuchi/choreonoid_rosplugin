@@ -31,12 +31,11 @@ public:
                 MessageView::WARNING, "The ROS master is not found.");
             return false;
         }
-            
+
         spinner.reset(new ros::AsyncSpinner(0));
         spinner->start();
 
         BodyPublisherItem::initialize(this);
-        
         return true;
     }
 

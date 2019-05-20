@@ -17,6 +17,10 @@
 #include <memory>
 #include "gettext.h"
 
+#include "cnoid_robot_hardware.h"
+// clock
+#include "rosgraph_msgs/Clock.h"
+
 using namespace std;
 using namespace cnoid;
 
@@ -65,6 +69,12 @@ public:
     vector<ros::Publisher> accelPublishers;
     void publishGyro(int index);
     void publishAccel(int index);
+
+    //
+    ros::Publisher clock_pub;
+    // ros control
+    cnoid_robot_hardware::CnoidRobotHW *cnoid_hw_;
+    controller_manager::ControllerManager *ros_cm_;
 };
 
 }
@@ -247,7 +257,7 @@ BodyNode::BodyNode(BodyItem* bodyItem)
 
     rosNode.reset(new ros::NodeHandle(name));
 
-    jointStatePublisher = rosNode->advertise<sensor_msgs::JointState>("joint_state", 1000);
+    jointStatePublisher = rosNode->advertise<sensor_msgs::JointState>("orig_joint_state", 1000);
     startToPublishKinematicStateChangeOnGUI();
 
     auto body = bodyItem->body();
@@ -275,11 +285,26 @@ BodyNode::BodyNode(BodyItem* bodyItem)
         std::string name = accel->name();
         accelPublishers[i] = rosNode->advertise<sensor_msgs::Imu>(name, 1);
     }
+
+    /// clock
+    clock_pub = rosNode->advertise<rosgraph_msgs::Clock>("/clock", 5);
+    /// trajectory
+    cnoid_hw_ = new cnoid_robot_hardware::CnoidRobotHW();
+    cnoid_hw_->cnoid_body = bodyItem->body();
+    //ros::NodeHandle nh;
+    ros::NodeHandle robot_nh("~");
+    if (!cnoid_hw_->init(*rosNode, robot_nh)) {
+      ROS_ERROR("Faild to initialize hardware");
+      //exit(1);
+    }
+    ros_cm_ = new controller_manager::ControllerManager (cnoid_hw_, *rosNode);
 }
 
 
 void BodyNode::start(ControllerIO* io, double maxPublishRate)
 {
+    cnoid_hw_->cnoid_body = io->body();
+
     ioBody = io->body();
     time = 0.0;
     minPublishCycle = maxPublishRate > 0.0 ? (1.0 / maxPublishRate) : 0.0;
@@ -331,6 +356,21 @@ void BodyNode::input()
 void BodyNode::control()
 {
     time += timeStep;
+
+    ros::Time now(time);
+    ros::Duration period(timeStep);
+
+    // clock pub
+    rosgraph_msgs::Clock clock_msg;
+    clock_msg.clock = now;
+    clock_pub.publish(clock_msg);
+
+    //
+    cnoid_hw_->read(now, period);
+    // read q from choreonoid
+    ros_cm_->update(now, period);
+    // write tau to choreonoid
+    cnoid_hw_->write(now, period);
 }
 
 
@@ -381,6 +421,7 @@ void BodyNode::initializeJointState(Body* body)
 
 void BodyNode::publishJointState(Body* body, double time)
 {
+#if 0
     jointState.header.stamp.fromSec(time);
 
     for(int i=0; i < body->numJoints(); ++i){
@@ -391,6 +432,7 @@ void BodyNode::publishJointState(Body* body, double time)
     }
 
     jointStatePublisher.publish(jointState);
+#endif
 }
 
 
