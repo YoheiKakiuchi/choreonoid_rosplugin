@@ -20,6 +20,7 @@
 #include "cnoid_robot_hardware.h"
 // clock
 #include "rosgraph_msgs/Clock.h"
+#include "std_srvs/Empty.h"
 
 using namespace std;
 using namespace cnoid;
@@ -70,6 +71,11 @@ public:
     void publishGyro(int index);
     void publishAccel(int index);
 
+    //
+    bool use_trajectory_controller;
+    ros::ServiceServer control_toggle_service;
+    bool toggle_controller(std_srvs::Empty::Request& req,
+                           std_srvs::Empty::Response& res);
     //
     bool publish_clock;
     unsigned long clock_counter;
@@ -300,12 +306,16 @@ BodyNode::BodyNode(BodyItem* bodyItem)
     publish_clock = false;
     clock_counter = 0;
     if (!published_clock) {
-      ROS_ERROR("publish /clock");
+      ROS_WARN("publish /clock");
       /// clock
       publish_clock = true;
       clock_pub = rosNode->advertise<rosgraph_msgs::Clock>("/clock", 5);
       /// trajectory
     }
+    use_trajectory_controller = true;
+    control_toggle_service = rosNode->advertiseService("toggle_controller",
+                                                       &BodyNode::toggle_controller, this);
+
     cnoid_hw_ = new cnoid_robot_hardware::CnoidRobotHW();
     cnoid_hw_->cnoid_body = bodyItem->body();
     //ros::NodeHandle nh;
@@ -387,8 +397,13 @@ void BodyNode::control()
     cnoid_hw_->read(now, period);
     // read q from choreonoid
     ros_cm_->update(now, period);
-    // write tau to choreonoid
-    cnoid_hw_->write(now, period);
+
+    if (use_trajectory_controller) {
+      // write tau to choreonoid
+      cnoid_hw_->write(now, period);
+    } else {
+      cnoid_hw_->dummy_write(now, period);
+    }
 
     clock_counter++;
 }
@@ -504,4 +519,18 @@ void BodyNode::publishAccel(int index)
   msg.linear_acceleration.z = accel->dv()[2];
 
   accelPublishers[index].publish(msg);
+}
+
+bool BodyNode::toggle_controller(std_srvs::Empty::Request& req,
+                                 std_srvs::Empty::Response& res)
+{
+  bool now = !use_trajectory_controller;
+  use_trajectory_controller = now;
+  if (use_trajectory_controller) {
+    ROS_ERROR("start trajectory controller");
+  } else {
+    ROS_ERROR("stop trajectory controller");
+  }
+
+  return true;
 }

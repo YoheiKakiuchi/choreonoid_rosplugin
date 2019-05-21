@@ -179,5 +179,20 @@ void CnoidRobotHW::write(const ros::Time& time, const ros::Duration& period)
   }
   return;
 }
-
+void CnoidRobotHW::dummy_write(const ros::Time& time, const ros::Duration& period)
+{
+  // write choreonoid body to ...
+  /// command ???
+  // flipper: 4
+  // jaco:    6
+  // hand:    3
+  //ROS_INFO("tm: %f", time.toSec());
+  for(int i = 0; i < joint_list_.size(); ++i) {
+    cnoid::Link* joint = cnoid_body->link(joint_list_[i]);
+    joint_position_command_[i] = joint->q();
+    //ROS_INFO("%f = %f %f %f", tq, joint_position_command_[i], joint->q(), joint->dq());
+    //joint->u() = tq;
+  }
+  return;
+}
 }

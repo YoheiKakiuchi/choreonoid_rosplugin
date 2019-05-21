@@ -13,6 +13,7 @@ add_compile_options(-std=c++11)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  std_srvs
   sensor_msgs
   image_transport
   choreonoid

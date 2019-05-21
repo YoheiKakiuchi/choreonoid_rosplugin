@@ -127,7 +127,7 @@ public:
    */
   virtual void write(const ros::Time& time, const ros::Duration& period);
 
-
+  void dummy_write(const ros::Time& time, const ros::Duration& period);
 protected:
   // Methods used to control a joint.
   enum ControlMethod {EFFORT, POSITION, POSITION_PID, VELOCITY, VELOCITY_PID};
