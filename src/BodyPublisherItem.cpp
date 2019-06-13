@@ -5,6 +5,7 @@
 #include <cnoid/Device>
 #include <cnoid/DeviceList>
 #include <cnoid/Camera>
+#include <cnoid/RangeCamera>
 #include <cnoid/ItemManager>
 #include <cnoid/TimeBar>
 #include <cnoid/Archive>
@@ -12,6 +13,7 @@
 #include <ros/node_handle.h>
 #include <sensor_msgs/JointState.h>
 #include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/Imu.h>
 #include <image_transport/image_transport.h>
 #include <memory>
@@ -31,6 +33,7 @@ class BodyNode
 {
 public:
     unique_ptr<ros::NodeHandle> rosNode;
+    string name;
     BodyItem* bodyItem;
     ScopedConnectionSet connections;
     ScopedConnection connectionOfKinematicStateChange;
@@ -48,6 +51,9 @@ public:
 
     DeviceList<Camera> cameras;
     vector<image_transport::Publisher> cameraImagePublishers;
+    DeviceList<RangeCamera> depth_cameras;
+    vector<ros::Publisher> points_cameraImagePublishers;
+    /// Range
     
     BodyNode(BodyItem* bodyItem);
 
@@ -62,7 +68,8 @@ public:
     void initializeJointState(Body* body);
     void publishJointState(Body* body, double time);
     void publishCameraImage(int index);
-
+    void createCameraImage(Camera *camera, sensor_msgs::Image &image);
+    void createCameraImageDepth(RangeCamera *camera, sensor_msgs::PointCloud2 &points);
     DeviceList<RateGyroSensor> gyroSensors;
     DeviceList<AccelerationSensor> accelSensors;
 
@@ -260,7 +267,7 @@ BodyNode::BodyNode(BodyItem* bodyItem)
     : bodyItem(bodyItem),
       timeBar(TimeBar::instance())
 {
-    string name = bodyItem->name();
+    name = bodyItem->name();
     std::replace(name.begin(), name.end(), '-', '_');
 
     rosNode.reset(new ros::NodeHandle(name));
@@ -272,11 +279,25 @@ BodyNode::BodyNode(BodyItem* bodyItem)
     DeviceList<> devices = body->devices();
 
     cameras.assign(devices.extract<Camera>());
+    depth_cameras.assign(devices.extract<RangeCamera>());
+
     image_transport::ImageTransport it(*rosNode);
     cameraImagePublishers.resize(cameras.size());
-    for(size_t i=0; i < cameras.size(); ++i){
-        auto camera = cameras[i];
-        cameraImagePublishers[i] = it.advertise(camera->name() + "/image", 1);
+    for(size_t i=0; i < cameras.size(); ++i) {
+        Camera *camera = cameras[i];
+        if (!!camera) {
+          cameraImagePublishers[i] = it.advertise(camera->name() + "/image", 1);
+          RangeCamera* rcamera = dynamic_cast<RangeCamera*>(camera);
+          if (!!rcamera) {
+            depth_cameras.push_back(rcamera);
+          }
+        }
+    }
+
+    points_cameraImagePublishers.resize(depth_cameras.size());
+    for(size_t i=0; i < depth_cameras.size(); ++i){
+        auto camera = depth_cameras[i];
+        points_cameraImagePublishers[i] = rosNode->advertise<sensor_msgs::PointCloud2>(camera->name() + "/points", 1);
     }
 
     gyroSensors.assign(devices.extract<RateGyroSensor> ());
@@ -343,15 +364,30 @@ void BodyNode::start(ControllerIO* io, double maxPublishRate)
 
     sensorConnections.disconnect();
     DeviceList<> devices = ioBody->devices();
-
     cameras.assign(devices.extract<Camera>());
+    depth_cameras.assign(devices.extract<RangeCamera>());
     for(size_t i=0; i < cameras.size(); ++i){
         auto camera = cameras[i];
         sensorConnections.add(
             camera->sigStateChanged().connect(
                 [&, i](){ publishCameraImage(i); }));
+	{
+	  Camera *cam = cameras[i];
+	  if (!!cam) {
+	    RangeCamera* rcamera = dynamic_cast<RangeCamera*>(cam);
+	    if (!!rcamera) {
+	      depth_cameras.push_back(rcamera);
+	    }
+	  }
+	}
     }
-
+    for(size_t i=0; i < depth_cameras.size(); ++i){
+        auto camera = depth_cameras[i];
+        int j = i + cameras.size();
+        sensorConnections.add(
+            camera->sigStateChanged().connect(
+                [&, j](){ publishCameraImage(j); }));
+    }
     gyroSensors.assign(devices.extract<RateGyroSensor> ());
     for(size_t i=0; i < gyroSensors.size(); ++i){
       auto gyro = gyroSensors[i];
@@ -359,7 +395,6 @@ void BodyNode::start(ControllerIO* io, double maxPublishRate)
             gyro->sigStateChanged().connect(
                 [&, i](){ publishGyro(i); }));
     }
-
     accelSensors.assign(devices.extract<AccelerationSensor> ());
     for(size_t i=0; i < accelSensors.size(); ++i){
       auto accel = accelSensors[i];
@@ -470,15 +505,80 @@ void BodyNode::publishJointState(Body* body, double time)
 #endif
 }
 
-
 void BodyNode::publishCameraImage(int index)
 {
-    auto camera = cameras[index];
+    if ( index >= cameras.size() ) {
+      int idx = index - cameras.size();
+      RangeCamera *camera = depth_cameras[idx];
+      sensor_msgs::PointCloud2 points;
+      createCameraImageDepth(camera, points);
+      points_cameraImagePublishers[idx].publish(points);
+      return;
+    }
+    Camera *camera = cameras[index];
     sensor_msgs::Image image;
+    createCameraImage(camera, image);
+    cameraImagePublishers[index].publish(image);
+}
+void BodyNode::createCameraImageDepth(RangeCamera *camera, sensor_msgs::PointCloud2 &points)
+{
+  //sensor_msgs::PointCloud2 range;
+  points.header.stamp.fromSec(time);
+  points.header.frame_id = name + "/" + camera->name();
+  points.width  = camera->resolutionX();
+  points.height = camera->resolutionY();
+  points.is_bigendian = false;
+  points.is_dense     = true;
+  if (camera->imageType() == cnoid::Camera::COLOR_IMAGE) {
+    points.fields.resize(4);
+    points.fields[3].name = "rgb";
+    points.fields[3].offset = 12;
+    points.fields[3].count = 1;
+    points.fields[3].datatype = sensor_msgs::PointField::FLOAT32;
+    points.point_step = 16;
+  } else {
+    points.fields.resize(3);
+    points.point_step = 12;
+  }
+  points.row_step = points.point_step * points.width;
+  points.fields[0].name = "x";
+  points.fields[0].offset = 0;
+  points.fields[0].datatype = sensor_msgs::PointField::FLOAT32;
+  points.fields[0].count = 1;
+  points.fields[1].name = "y";
+  points.fields[1].offset = 4;
+  points.fields[1].datatype = sensor_msgs::PointField::FLOAT32;
+  points.fields[1].count = 1;
+  points.fields[2].name = "z";
+  points.fields[2].offset = 8;
+  points.fields[2].datatype = sensor_msgs::PointField::FLOAT32;
+  points.fields[2].count = 1;
+  const std::vector<Vector3f>& pts = camera->constPoints();
+  const unsigned char* pixels = camera->constImage().pixels();
+  points.data.resize(pts.size() * points.point_step);
+  unsigned char* dst = (unsigned char*)&(points.data[0]);
+  for (size_t j = 0; j < pts.size(); ++j) {
+    float x =   pts[j].x();
+    float y = - pts[j].y();
+    float z = - pts[j].z();
+    std::memcpy(&dst[0], &x, 4);
+    std::memcpy(&dst[4], &y, 4);
+    std::memcpy(&dst[8], &z, 4);
+    if (camera->imageType() == cnoid::Camera::COLOR_IMAGE) {
+      dst[14] = *pixels++;
+      dst[13] = *pixels++;
+      dst[12] = *pixels++;
+      dst[15] = 0;
+    }
+    dst += points.point_step;
+  }
+}
+void BodyNode::createCameraImage(Camera *camera, sensor_msgs::Image &image)
+{
     image.header.stamp.fromSec(time);
-    image.header.frame_id = camera->name();
+    image.header.frame_id = name + "/" + camera->name();
     image.height = camera->image().height();
-    image.width = camera->image().width();
+    image.width  = camera->image().width();
     if(camera->image().numComponents() == 3){
         image.encoding = sensor_msgs::image_encodings::RGB8;
     } else if (camera->image().numComponents() == 1){
@@ -490,7 +590,6 @@ void BodyNode::publishCameraImage(int index)
     image.step = camera->image().width() * camera->image().numComponents();
     image.data.resize(image.step * image.height);
     std::memcpy(&(image.data[0]), &(camera->image().pixels()[0]), image.step * image.height);
-    cameraImagePublishers[index].publish(image);
 }
 
 void BodyNode::publishGyro(int index)
@@ -499,7 +598,7 @@ void BodyNode::publishGyro(int index)
 
   sensor_msgs::Imu msg;
   msg.header.stamp.fromSec(time);
-  msg.header.frame_id = gyro->name();
+  msg.header.frame_id = name + "/" + gyro->name();
   msg.angular_velocity.x = gyro->w()[0];
   msg.angular_velocity.y = gyro->w()[1];
   msg.angular_velocity.z = gyro->w()[2];
@@ -513,7 +612,7 @@ void BodyNode::publishAccel(int index)
 
   sensor_msgs::Imu msg;
   msg.header.stamp.fromSec(time);
-  msg.header.frame_id = accel->name();
+  msg.header.frame_id = name + "/" + accel->name();
   msg.linear_acceleration.x = accel->dv()[0];
   msg.linear_acceleration.y = accel->dv()[1];
   msg.linear_acceleration.z = accel->dv()[2];
