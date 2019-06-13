@@ -280,19 +280,27 @@ BodyNode::BodyNode(BodyItem* bodyItem)
     DeviceList<> devices = body->devices();
 
     cameras.assign(devices.extract<Camera>());
+    depth_cameras.assign(devices.extract<RangeCamera>());
+
     image_transport::ImageTransport it(*rosNode);
     cameraImagePublishers.resize(cameras.size());
-    for(size_t i=0; i < cameras.size(); ++i){
-        auto camera = cameras[i];
-        cameraImagePublishers[i] = it.advertise(camera->name() + "/image", 1);
+    for(size_t i=0; i < cameras.size(); ++i) {
+        Camera *camera = cameras[i];
+        std::cerr << "cam: " << camera->name() << std::endl;
+        if (!!camera) {
+          cameraImagePublishers[i] = it.advertise(camera->name() + "/image", 1);
+          RangeCamera* rcamera = dynamic_cast<RangeCamera*>(camera);
+          std::cerr << "rcam: " << rcamera->name() << std::endl;
+          if (!!rcamera) {
+            depth_cameras.push_back(rcamera);
+          }
+        }
     }
 
-    depth_cameras.assign(devices.extract<RangeCamera>());
-    depth_cameraImagePublishers.resize(depth_cameras.size());
     points_cameraImagePublishers.resize(depth_cameras.size());
     for(size_t i=0; i < depth_cameras.size(); ++i){
         auto camera = depth_cameras[i];
-        depth_cameraImagePublishers[i] = it.advertise(camera->name() + "/image", 1);
+        std::cerr << "dcam: " << camera->name() << std::endl;
         points_cameraImagePublishers[i] = rosNode->advertise<sensor_msgs::PointCloud2>(camera->name() + "/points", 1);
     }
 
