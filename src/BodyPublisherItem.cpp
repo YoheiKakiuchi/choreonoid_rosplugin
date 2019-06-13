@@ -367,16 +367,15 @@ void BodyNode::start(ControllerIO* io, double maxPublishRate)
     initializeJointState(ioBody);
 
     sensorConnections.disconnect();
-    DeviceList<> devices = ioBody->devices();
-
-    cameras.assign(devices.extract<Camera>());
+    //DeviceList<> devices = ioBody->devices();
+    //cameras.assign(devices.extract<Camera>());
     for(size_t i=0; i < cameras.size(); ++i){
         auto camera = cameras[i];
         sensorConnections.add(
             camera->sigStateChanged().connect(
                 [&, i](){ publishCameraImage(i); }));
     }
-    depth_cameras.assign(devices.extract<RangeCamera>());
+    //depth_cameras.assign(devices.extract<RangeCamera>());
     for(size_t i=0; i < depth_cameras.size(); ++i){
         auto camera = depth_cameras[i];
         int j = i + cameras.size();
@@ -384,16 +383,14 @@ void BodyNode::start(ControllerIO* io, double maxPublishRate)
             camera->sigStateChanged().connect(
                 [&, j](){ publishCameraImage(j); }));
     }
-
-    gyroSensors.assign(devices.extract<RateGyroSensor> ());
+    //gyroSensors.assign(devices.extract<RateGyroSensor> ());
     for(size_t i=0; i < gyroSensors.size(); ++i){
       auto gyro = gyroSensors[i];
         sensorConnections.add(
             gyro->sigStateChanged().connect(
                 [&, i](){ publishGyro(i); }));
     }
-
-    accelSensors.assign(devices.extract<AccelerationSensor> ());
+    //accelSensors.assign(devices.extract<AccelerationSensor> ());
     for(size_t i=0; i < accelSensors.size(); ++i){
       auto accel = accelSensors[i];
         sensorConnections.add(
