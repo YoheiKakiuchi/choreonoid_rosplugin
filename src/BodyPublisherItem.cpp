@@ -52,7 +52,6 @@ public:
     DeviceList<Camera> cameras;
     vector<image_transport::Publisher> cameraImagePublishers;
     DeviceList<RangeCamera> depth_cameras;
-    vector<image_transport::Publisher> depth_cameraImagePublishers;
     vector<ros::Publisher> points_cameraImagePublishers;
     /// Range
     
@@ -286,11 +285,9 @@ BodyNode::BodyNode(BodyItem* bodyItem)
     cameraImagePublishers.resize(cameras.size());
     for(size_t i=0; i < cameras.size(); ++i) {
         Camera *camera = cameras[i];
-        std::cerr << "cam: " << camera->name() << std::endl;
         if (!!camera) {
           cameraImagePublishers[i] = it.advertise(camera->name() + "/image", 1);
           RangeCamera* rcamera = dynamic_cast<RangeCamera*>(camera);
-          std::cerr << "rcam: " << rcamera->name() << std::endl;
           if (!!rcamera) {
             depth_cameras.push_back(rcamera);
           }
@@ -300,7 +297,6 @@ BodyNode::BodyNode(BodyItem* bodyItem)
     points_cameraImagePublishers.resize(depth_cameras.size());
     for(size_t i=0; i < depth_cameras.size(); ++i){
         auto camera = depth_cameras[i];
-        std::cerr << "dcam: " << camera->name() << std::endl;
         points_cameraImagePublishers[i] = rosNode->advertise<sensor_msgs::PointCloud2>(camera->name() + "/points", 1);
     }
 
@@ -367,15 +363,24 @@ void BodyNode::start(ControllerIO* io, double maxPublishRate)
     initializeJointState(ioBody);
 
     sensorConnections.disconnect();
-    //DeviceList<> devices = ioBody->devices();
-    //cameras.assign(devices.extract<Camera>());
+    DeviceList<> devices = ioBody->devices();
+    cameras.assign(devices.extract<Camera>());
+    depth_cameras.assign(devices.extract<RangeCamera>());
     for(size_t i=0; i < cameras.size(); ++i){
         auto camera = cameras[i];
         sensorConnections.add(
             camera->sigStateChanged().connect(
                 [&, i](){ publishCameraImage(i); }));
+	{
+	  Camera *cam = cameras[i];
+	  if (!!cam) {
+	    RangeCamera* rcamera = dynamic_cast<RangeCamera*>(cam);
+	    if (!!rcamera) {
+	      depth_cameras.push_back(rcamera);
+	    }
+	  }
+	}
     }
-    //depth_cameras.assign(devices.extract<RangeCamera>());
     for(size_t i=0; i < depth_cameras.size(); ++i){
         auto camera = depth_cameras[i];
         int j = i + cameras.size();
@@ -383,14 +388,14 @@ void BodyNode::start(ControllerIO* io, double maxPublishRate)
             camera->sigStateChanged().connect(
                 [&, j](){ publishCameraImage(j); }));
     }
-    //gyroSensors.assign(devices.extract<RateGyroSensor> ());
+    gyroSensors.assign(devices.extract<RateGyroSensor> ());
     for(size_t i=0; i < gyroSensors.size(); ++i){
       auto gyro = gyroSensors[i];
         sensorConnections.add(
             gyro->sigStateChanged().connect(
                 [&, i](){ publishGyro(i); }));
     }
-    //accelSensors.assign(devices.extract<AccelerationSensor> ());
+    accelSensors.assign(devices.extract<AccelerationSensor> ());
     for(size_t i=0; i < accelSensors.size(); ++i){
       auto accel = accelSensors[i];
         sensorConnections.add(
@@ -505,11 +510,8 @@ void BodyNode::publishCameraImage(int index)
     if ( index >= cameras.size() ) {
       int idx = index - cameras.size();
       RangeCamera *camera = depth_cameras[idx];
-      sensor_msgs::Image image;
       sensor_msgs::PointCloud2 points;
-      createCameraImage(camera, image);
       createCameraImageDepth(camera, points);
-      depth_cameraImagePublishers[idx].publish(image);
       points_cameraImagePublishers[idx].publish(points);
       return;
     }
@@ -528,7 +530,7 @@ void BodyNode::createCameraImageDepth(RangeCamera *camera, sensor_msgs::PointClo
   points.is_bigendian = false;
   points.is_dense     = true;
   if (camera->imageType() == cnoid::Camera::COLOR_IMAGE) {
-    points.fields.resize(6);
+    points.fields.resize(4);
     points.fields[3].name = "rgb";
     points.fields[3].offset = 12;
     points.fields[3].count = 1;
@@ -542,15 +544,15 @@ void BodyNode::createCameraImageDepth(RangeCamera *camera, sensor_msgs::PointClo
   points.fields[0].name = "x";
   points.fields[0].offset = 0;
   points.fields[0].datatype = sensor_msgs::PointField::FLOAT32;
-  points.fields[0].count = 4;
+  points.fields[0].count = 1;
   points.fields[1].name = "y";
   points.fields[1].offset = 4;
   points.fields[1].datatype = sensor_msgs::PointField::FLOAT32;
-  points.fields[1].count = 4;
+  points.fields[1].count = 1;
   points.fields[2].name = "z";
   points.fields[2].offset = 8;
   points.fields[2].datatype = sensor_msgs::PointField::FLOAT32;
-  points.fields[2].count = 4;
+  points.fields[2].count = 1;
   const std::vector<Vector3f>& pts = camera->constPoints();
   const unsigned char* pixels = camera->constImage().pixels();
   points.data.resize(pts.size() * points.point_step);
