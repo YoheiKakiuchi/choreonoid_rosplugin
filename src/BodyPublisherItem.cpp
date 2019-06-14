@@ -15,6 +15,7 @@
 #include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/Imu.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <image_transport/image_transport.h>
 #include <memory>
 #include "gettext.h"
@@ -272,7 +273,8 @@ BodyNode::BodyNode(BodyItem* bodyItem)
 
     rosNode.reset(new ros::NodeHandle(name));
 
-    jointStatePublisher = rosNode->advertise<sensor_msgs::JointState>("orig_joint_state", 1000);
+    //jointStatePublisher = rosNode->advertise<sensor_msgs::JointState>("orig_joint_state", 1000);
+    jointStatePublisher = rosNode->advertise<geometry_msgs::PoseStamped>("ground_truth_pose", 1000);
     startToPublishKinematicStateChangeOnGUI();
 
     auto body = bodyItem->body();
@@ -491,6 +493,22 @@ void BodyNode::initializeJointState(Body* body)
 
 void BodyNode::publishJointState(Body* body, double time)
 {
+  geometry_msgs::PoseStamped pose;
+  pose.header.stamp.fromSec(time);
+  pose.header.frame_id = "choreonoid_origin";
+
+  Vector3d trans = body->rootLink()->translation();
+  Quaterniond quat(body->rootLink()->rotation());
+
+  pose.pose.position.x = trans.x();
+  pose.pose.position.y = trans.y();
+  pose.pose.position.z = trans.z();
+  pose.pose.orientation.x = quat.x();
+  pose.pose.orientation.y = quat.y();
+  pose.pose.orientation.z = quat.z();
+  pose.pose.orientation.w = quat.w();
+
+  jointStatePublisher.publish(pose);
 #if 0
     jointState.header.stamp.fromSec(time);
 
