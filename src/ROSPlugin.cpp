@@ -1,4 +1,6 @@
 #include "BodyPublisherItem.h"
+#include "WorldRosItem.h"
+//
 #include <cnoid/Plugin>
 #include <cnoid/MessageView>
 #include <ros/init.h>
@@ -11,12 +13,12 @@ using namespace cnoid;
 class ROSPlugin : public Plugin
 {
     std::unique_ptr<ros::AsyncSpinner> spinner;
-    
+
 public:
     ROSPlugin() : Plugin("ROS") {
         require("Body");
     }
-  
+
     virtual bool initialize()
     {
         int argc = 0;
@@ -37,7 +39,8 @@ public:
         spinner->start();
 
         BodyPublisherItem::initialize(this);
-        
+        WorldRosItem::initialize(this);
+
         return true;
     }
 
