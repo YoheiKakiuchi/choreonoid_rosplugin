@@ -113,6 +113,7 @@ void WorldRosItem::start()
   double now = sim->currentTime();
 
   // rosnode_ = boost::shared_ptr<ros::NodeHandle>(new ros::NodeHandle(cnoidrospkg_parent_namespace_));
+  nh = boost::shared_ptr<ros::NodeHandle>(new ros::NodeHandle("choreonoid"));
 
   // apply uppper limits
   post_dynamics_function_regid = sim->addPostDynamicsFunction(std::bind(&WorldRosItem::onPostDynamics, this));
