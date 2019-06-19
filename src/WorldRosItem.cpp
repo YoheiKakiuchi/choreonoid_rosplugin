@@ -113,10 +113,13 @@ void WorldRosItem::start()
 {
   ROS_WARN("start");
   if (! (world = this->findOwnerItem<WorldItem>())) {
+    ROS_WARN("do not find world");
     return;
   } else if (! (sim = SimulatorItem::findActiveSimulatorItemFor(this))) {
+    ROS_WARN("do not find sim");
     return;
   }
+  ROS_WARN("sim = %lX", (void *)sim);
   if (ros::ok() && !nh) {
     startROS();
   }
@@ -168,12 +171,14 @@ void WorldRosItem::onPostDynamics()
 
 bool WorldRosItem::pausePhysics(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
+  ROS_WARN("sim = %lX", (void *)sim);
   sim->pauseSimulation();
   return true;
 }
 
 bool WorldRosItem::unpausePhysics(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
+  ROS_WARN("sim = %lX", (void *)sim);
   sim->restartSimulation();
   return true;
 }
@@ -183,6 +188,7 @@ bool WorldRosItem::resetSimulation(std_srvs::Empty::Request &req, std_srvs::Empt
   if (!sim) {
     ROS_WARN("not sim");
   }
+  ROS_WARN("sim = %lX", (void *)sim);
   sim->startSimulation(true);
   return true;
 }
