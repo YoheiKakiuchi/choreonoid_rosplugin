@@ -25,6 +25,7 @@ const static std::string cnoidrospkg_parent_namespace_ = "choreonoid";
 
 void WorldRosItem::initialize(ExtensionManager* ext)
 {
+  std::cerr << "ROS initialize" << std::endl;
   ext->itemManager().registerClass<WorldRosItem>("WorldRosItem");
   ext->itemManager().addCreationPanel<WorldRosItem>();
 }
@@ -121,8 +122,9 @@ void WorldRosItem::start()
 
 bool WorldRosItem::startROS()
 {
-  ROS_WARN("Found WorldItem: %s", world->name().c_str());
-  ROS_WARN("Found SimulatorItem: %s", sim->name().c_str());
+  //ROS_WARN("Found WorldItem: %s", world->name().c_str());
+  //ROS_WARN("Found SimulatorItem: %s", sim->name().c_str());
+  ROS_WARN("startROS");
 
   // rosnode_ = boost::shared_ptr<ros::NodeHandle>(new ros::NodeHandle(cnoidrospkg_parent_namespace_));
   nh = boost::shared_ptr<ros::NodeHandle>(new ros::NodeHandle("choreonoid"));
