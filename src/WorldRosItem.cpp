@@ -38,9 +38,9 @@ WorldRosItem::WorldRosItem()
 
   RootItem::instance()->sigTreeChanged().connect(boost::bind(&WorldRosItem::hookSimulationStartAndStopEvent, this));
 
-  if (ros::ok() && !nh) {
-    startROS();
-  }
+  //if (ros::ok() && !nh) {
+  //  startROS();
+  //}
 }
 
 WorldRosItem::WorldRosItem(const WorldRosItem& org)
@@ -180,6 +180,9 @@ bool WorldRosItem::unpausePhysics(std_srvs::Empty::Request &req, std_srvs::Empty
 
 bool WorldRosItem::resetSimulation(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
+  if (!sim) {
+    ROS_WARN("not sim");
+  }
   sim->startSimulation(true);
   return true;
 }
