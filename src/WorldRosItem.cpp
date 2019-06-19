@@ -36,6 +36,10 @@ WorldRosItem::WorldRosItem()
   post_dynamics_function_regid = -1;
 
   RootItem::instance()->sigTreeChanged().connect(boost::bind(&WorldRosItem::hookSimulationStartAndStopEvent, this));
+
+  if (!nh) {
+    startROS();
+  }
 }
 
 WorldRosItem::WorldRosItem(const WorldRosItem& org)
@@ -110,11 +114,15 @@ void WorldRosItem::start()
   } else if (! (sim = SimulatorItem::findActiveSimulatorItemFor(this))) {
     return;
   }
+  if (!nh) {
+    startROS();
+  }
+}
 
+bool WorldRosItem::startROS()
+{
   ROS_WARN("Found WorldItem: %s", world->name().c_str());
   ROS_WARN("Found SimulatorItem: %s", sim->name().c_str());
-
-  double now = sim->currentTime();
 
   // rosnode_ = boost::shared_ptr<ros::NodeHandle>(new ros::NodeHandle(cnoidrospkg_parent_namespace_));
   nh = boost::shared_ptr<ros::NodeHandle>(new ros::NodeHandle("choreonoid"));
@@ -180,6 +188,6 @@ void WorldRosItem::stop()
     sim->removePostDynamicsFunction(post_dynamics_function_regid);
     post_dynamics_function_regid = -1;
   }
-
+  // stop ROS ???
   return;
 }

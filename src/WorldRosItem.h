@@ -95,6 +95,8 @@ private:
     SimulatorItemPtr sim;
     boost::shared_ptr<ros::NodeHandle>   nh;
 
+    bool startROS(void);
+
     /// The registration id of calling function from physics engine. (physics engine is SimulatorItem's subclass)
     int post_dynamics_function_regid;
 
