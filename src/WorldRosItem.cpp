@@ -55,6 +55,7 @@ WorldRosItem::WorldRosItem(const WorldRosItem& org)
 
 WorldRosItem::~WorldRosItem()
 {
+  ROS_WARN("dispose");
   stop();
 }
 
@@ -110,6 +111,7 @@ void WorldRosItem::hookSimulationStartAndStopEvent()
 
 void WorldRosItem::start()
 {
+  ROS_WARN("start");
   if (! (world = this->findOwnerItem<WorldItem>())) {
     return;
   } else if (! (sim = SimulatorItem::findActiveSimulatorItemFor(this))) {
@@ -118,6 +120,8 @@ void WorldRosItem::start()
   if (ros::ok() && !nh) {
     startROS();
   }
+  // apply uppper limits
+  post_dynamics_function_regid = sim->addPostDynamicsFunction(std::bind(&WorldRosItem::onPostDynamics, this));
 }
 
 bool WorldRosItem::startROS()
@@ -128,9 +132,6 @@ bool WorldRosItem::startROS()
 
   // rosnode_ = boost::shared_ptr<ros::NodeHandle>(new ros::NodeHandle(cnoidrospkg_parent_namespace_));
   nh = boost::shared_ptr<ros::NodeHandle>(new ros::NodeHandle("choreonoid"));
-
-  // apply uppper limits
-  post_dynamics_function_regid = sim->addPostDynamicsFunction(std::bind(&WorldRosItem::onPostDynamics, this));
 
   std::string pause_physics_service_name("pause_physics");
   ros::AdvertiseServiceOptions pause_physics_aso =
