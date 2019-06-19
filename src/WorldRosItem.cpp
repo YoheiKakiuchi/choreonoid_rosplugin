@@ -31,7 +31,7 @@ void WorldRosItem::initialize(ExtensionManager* ext)
 
 WorldRosItem::WorldRosItem()
 {
-  ROS_WARN("created 0")
+  ROS_WARN("created 0");
   hooked_simulators_.clear();
   post_dynamics_function_regid = -1;
 
@@ -41,7 +41,7 @@ WorldRosItem::WorldRosItem()
 WorldRosItem::WorldRosItem(const WorldRosItem& org)
   : Item(org)
 {
-  ROS_WARN("created 1")
+  ROS_WARN("created 1");
   hooked_simulators_.clear();
   post_dynamics_function_regid = -1;
 
@@ -55,13 +55,13 @@ WorldRosItem::~WorldRosItem()
 
 bool WorldRosItem::store(Archive& archive)
 {
-  ROS_WARN("store")
+  ROS_WARN("store");
   return true;
 }
 
 bool WorldRosItem::restore(const Archive& archive)
 {
-  ROS_WARN("restore")
+  ROS_WARN("restore");
   return true;
 }
 
@@ -175,7 +175,7 @@ bool WorldRosItem::resetSimulation(std_srvs::Empty::Request &req, std_srvs::Empt
 ////
 void WorldRosItem::stop()
 {
-  ROS_WARN("stop")
+  ROS_WARN("stop");
   if (post_dynamics_function_regid != -1) {
     sim->removePostDynamicsFunction(post_dynamics_function_regid);
     post_dynamics_function_regid = -1;
