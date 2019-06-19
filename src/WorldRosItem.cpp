@@ -37,7 +37,7 @@ WorldRosItem::WorldRosItem()
 
   RootItem::instance()->sigTreeChanged().connect(boost::bind(&WorldRosItem::hookSimulationStartAndStopEvent, this));
 
-  if (!nh) {
+  if (ros::ok() && !nh) {
     startROS();
   }
 }
@@ -114,7 +114,7 @@ void WorldRosItem::start()
   } else if (! (sim = SimulatorItem::findActiveSimulatorItemFor(this))) {
     return;
   }
-  if (!nh) {
+  if (ros::ok() && !nh) {
     startROS();
   }
 }
