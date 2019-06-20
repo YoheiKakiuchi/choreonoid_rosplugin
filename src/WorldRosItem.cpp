@@ -13,6 +13,7 @@
 #include <cnoid/MessageView>
 #include <cnoid/ItemTreeView>
 #include <cnoid/EigenUtil>
+#include <cnoid/SimulationBar>
 #include <fstream>
 
 using namespace cnoid;
@@ -196,11 +197,16 @@ bool WorldRosItem::resetSimulation(std_srvs::Empty::Request &req, std_srvs::Empt
 
   sim->stopSimulation();
   TimeBar* timeBar = TimeBar::instance();
-  if(timeBar->isDoingPlayback()){
+  ROS_WARN("playback %d", timeBar->isDoingPlayback());
+  if(timeBar->isDoingPlayback()) {
     timeBar->stopPlayback();
   }
+
   //sigSimulationAboutToStart_(simulator);
   sim->startSimulation(true);
+  ROS_WARN("playback %d", timeBar->isDoingPlayback());
+  timeBar->startPlayback();
+
   return true;
 }
 ////
