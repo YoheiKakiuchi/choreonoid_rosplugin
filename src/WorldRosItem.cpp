@@ -120,6 +120,7 @@ void WorldRosItem::start()
     return;
   }
   ROS_WARN("sim = %lX", (void *)sim);
+  ROS_WARN("running %d", sim->isRunning());
   if (ros::ok() && !nh) {
     startROS();
   }
@@ -172,6 +173,7 @@ void WorldRosItem::onPostDynamics()
 bool WorldRosItem::pausePhysics(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
   ROS_WARN("sim = %lX", (void *)sim);
+  ROS_WARN("running %d", sim->isRunning());
   sim->pauseSimulation();
   return true;
 }
@@ -179,6 +181,7 @@ bool WorldRosItem::pausePhysics(std_srvs::Empty::Request &req, std_srvs::Empty::
 bool WorldRosItem::unpausePhysics(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
   ROS_WARN("sim = %lX", (void *)sim);
+  ROS_WARN("running %d", sim->isRunning());
   sim->restartSimulation();
   return true;
 }
@@ -189,6 +192,14 @@ bool WorldRosItem::resetSimulation(std_srvs::Empty::Request &req, std_srvs::Empt
     ROS_WARN("not sim");
   }
   ROS_WARN("sim = %lX", (void *)sim);
+  ROS_WARN("running %d", sim->isRunning());
+
+  sim->stopSimulation();
+  TimeBar* timeBar = TimeBar::instance();
+  if(timeBar->isDoingPlayback()){
+    timeBar->stopPlayback();
+  }
+  //sigSimulationAboutToStart_(simulator);
   sim->startSimulation(true);
   return true;
 }
@@ -196,6 +207,7 @@ bool WorldRosItem::resetSimulation(std_srvs::Empty::Request &req, std_srvs::Empt
 void WorldRosItem::stop()
 {
   ROS_WARN("stop");
+  ROS_WARN("running %d", sim->isRunning());
   if (post_dynamics_function_regid != -1) {
     sim->removePostDynamicsFunction(post_dynamics_function_regid);
     post_dynamics_function_regid = -1;
