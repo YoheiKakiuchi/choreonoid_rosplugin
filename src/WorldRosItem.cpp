@@ -199,13 +199,13 @@ bool WorldRosItem::resetSimulation(std_srvs::Empty::Request &req, std_srvs::Empt
   TimeBar* timeBar = TimeBar::instance();
   ROS_WARN("playback %d", timeBar->isDoingPlayback());
   if(timeBar->isDoingPlayback()) {
-    timeBar->stopPlayback();
+    timeBar->stopPlayback(true);
   }
 
   //sigSimulationAboutToStart_(simulator);
   sim->startSimulation(true);
   ROS_WARN("playback %d", timeBar->isDoingPlayback());
-  timeBar->startPlayback();
+  timeBar->startPlaybackFromFillLevel();
 
   return true;
 }
