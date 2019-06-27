@@ -33,7 +33,6 @@ void WorldRosItem::initialize(ExtensionManager* ext)
 
 WorldRosItem::WorldRosItem()
 {
-  ROS_WARN("created 0");
   hooked_simulators_.clear();
   post_dynamics_function_regid = -1;
 
@@ -47,7 +46,6 @@ WorldRosItem::WorldRosItem()
 WorldRosItem::WorldRosItem(const WorldRosItem& org)
   : Item(org)
 {
-  ROS_WARN("created 1");
   hooked_simulators_.clear();
   post_dynamics_function_regid = -1;
 
@@ -56,19 +54,16 @@ WorldRosItem::WorldRosItem(const WorldRosItem& org)
 
 WorldRosItem::~WorldRosItem()
 {
-  ROS_WARN("dispose");
   stop();
 }
 
 bool WorldRosItem::store(Archive& archive)
 {
-  ROS_WARN("store");
   return true;
 }
 
 bool WorldRosItem::restore(const Archive& archive)
 {
-  ROS_WARN("restore");
   return true;
 }
 
@@ -112,7 +107,6 @@ void WorldRosItem::hookSimulationStartAndStopEvent()
 
 void WorldRosItem::start()
 {
-  ROS_WARN("start");
   if (! (world = this->findOwnerItem<WorldItem>())) {
     ROS_WARN("do not find world");
     return;
@@ -120,8 +114,6 @@ void WorldRosItem::start()
     ROS_WARN("do not find sim");
     return;
   }
-  ROS_WARN("sim = %lX", (void *)sim);
-  ROS_WARN("running %d", sim->isRunning());
   if (ros::ok() && !nh) {
     startROS();
   }
@@ -135,6 +127,7 @@ bool WorldRosItem::startROS()
   //ROS_WARN("Found SimulatorItem: %s", sim->name().c_str());
   ROS_WARN("startROS");
 
+#if 0
   // rosnode_ = boost::shared_ptr<ros::NodeHandle>(new ros::NodeHandle(cnoidrospkg_parent_namespace_));
   nh = boost::shared_ptr<ros::NodeHandle>(new ros::NodeHandle("choreonoid"));
 
@@ -143,7 +136,7 @@ bool WorldRosItem::startROS()
     ros::AdvertiseServiceOptions::create<std_srvs::Empty>(
                                                           pause_physics_service_name,
                                                           boost::bind(&WorldRosItem::pausePhysics,this,_1,_2),
-                                                          ros::VoidPtr(), ros::getGlobalCallbackQueue());
+                                                          ros::VoidPtr(), &sim_queue);
   pause_physics_service_ = nh->advertiseService(pause_physics_aso);
 
   std::string unpause_physics_service_name("unpause_physics");
@@ -151,7 +144,7 @@ bool WorldRosItem::startROS()
     ros::AdvertiseServiceOptions::create<std_srvs::Empty>(
                                                           unpause_physics_service_name,
                                                           boost::bind(&WorldRosItem::unpausePhysics,this,_1,_2),
-                                                          ros::VoidPtr(), ros::getGlobalCallbackQueue());
+                                                          ros::VoidPtr(), &sim_queue);
   unpause_physics_service_ = nh->advertiseService(unpause_physics_aso);
 
   std::string reset_simulation_service_name("reset_simulation");
@@ -159,30 +152,27 @@ bool WorldRosItem::startROS()
     ros::AdvertiseServiceOptions::create<std_srvs::Empty>(
                                                           reset_simulation_service_name,
                                                           boost::bind(&WorldRosItem::resetSimulation,this,_1,_2),
-                                                          ros::VoidPtr(), ros::getGlobalCallbackQueue());
+                                                          ros::VoidPtr(), &sim_queue);
   reset_simulation_service_ = nh->advertiseService(reset_simulation_aso);
-
+#endif
   //async_ros_spin_.reset(new ros::AsyncSpinner(0));
   //async_ros_spin_->start();
 }
 
 void WorldRosItem::onPostDynamics()
 {
-  //
+  //ROS_WARN("post");
+  sim_queue.callAvailable(ros::WallDuration());
 }
 
 bool WorldRosItem::pausePhysics(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
-  ROS_WARN("sim = %lX", (void *)sim);
-  ROS_WARN("running %d", sim->isRunning());
   sim->pauseSimulation();
   return true;
 }
 
 bool WorldRosItem::unpausePhysics(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
-  ROS_WARN("sim = %lX", (void *)sim);
-  ROS_WARN("running %d", sim->isRunning());
   sim->restartSimulation();
   return true;
 }
@@ -192,28 +182,15 @@ bool WorldRosItem::resetSimulation(std_srvs::Empty::Request &req, std_srvs::Empt
   if (!sim) {
     ROS_WARN("not sim");
   }
-  ROS_WARN("sim = %lX", (void *)sim);
-  ROS_WARN("running %d", sim->isRunning());
-
-  sim->stopSimulation();
-  TimeBar* timeBar = TimeBar::instance();
-  ROS_WARN("playback %d", timeBar->isDoingPlayback());
-  if(timeBar->isDoingPlayback()) {
-    timeBar->stopPlayback(true);
-  }
-
+  ROS_WARN("rst: ");
   //sigSimulationAboutToStart_(simulator);
   sim->startSimulation(true);
-  ROS_WARN("playback %d", timeBar->isDoingPlayback());
-  timeBar->startPlaybackFromFillLevel();
 
   return true;
 }
 ////
 void WorldRosItem::stop()
 {
-  ROS_WARN("stop");
-  ROS_WARN("running %d", sim->isRunning());
   if (post_dynamics_function_regid != -1) {
     sim->removePostDynamicsFunction(post_dynamics_function_regid);
     post_dynamics_function_regid = -1;

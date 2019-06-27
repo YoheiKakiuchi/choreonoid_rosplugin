@@ -123,6 +123,8 @@ private:
     ros::ServiceServer unpause_physics_service_;
     /// For getting collision data.
     WorldRosSimulatorItemAccessor* sim_access_;
+
+    ros::CallbackQueue sim_queue;
 };
 
 typedef ref_ptr<WorldRosItem> WorldRosItemPtr;

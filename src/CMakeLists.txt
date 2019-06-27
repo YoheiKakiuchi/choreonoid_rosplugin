@@ -6,6 +6,7 @@ add_cnoid_plugin(${target} SHARED
   ROSPlugin.cpp
   BodyPublisherItem.cpp
   WorldRosItem.cpp
+  ROSBar.cpp
   cnoid_robot_hardware.cpp
   ${mofiles}
   )
