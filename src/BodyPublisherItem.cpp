@@ -24,6 +24,7 @@
 // clock
 #include "rosgraph_msgs/Clock.h"
 #include "std_srvs/Empty.h"
+#include <cmath>
 
 using namespace std;
 using namespace cnoid;
@@ -579,6 +580,9 @@ void BodyNode::createCameraImageDepth(RangeCamera *camera, sensor_msgs::PointClo
     float x =   pts[j].x();
     float y = - pts[j].y();
     float z = - pts[j].z();
+    if (std::isnan(x) || std::isnan(y) || std::isnan(z)) {
+      x = y = z = 0;
+    }
     std::memcpy(&dst[0], &x, 4);
     std::memcpy(&dst[4], &y, 4);
     std::memcpy(&dst[8], &z, 4);
