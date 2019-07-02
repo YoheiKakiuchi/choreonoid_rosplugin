@@ -38,7 +38,7 @@
 */
 
 #include "cnoid_robot_hardware.h"
-#include <urdf/model.h>
+//#include <urdf/model.h>
 
 #include <thread>
 
@@ -50,7 +50,7 @@ bool CnoidRobotHW::init(ros::NodeHandle& root_nh, ros::NodeHandle &robot_hw_nh)/
   // reading paramerters
 
   //prev_ref_positions_.resize(number_of_angles_);
-
+#if 0
   std::string model_str;
   if (!root_nh.getParam("robot_description", model_str)) {
     ROS_ERROR("Failed to get model from robot_description");
@@ -61,6 +61,8 @@ bool CnoidRobotHW::init(ros::NodeHandle& root_nh, ros::NodeHandle &robot_hw_nh)/
     ROS_ERROR("Failed to parse robot_description");
     return false;
   }
+#endif
+
 #if 0
   ROS_WARN("model: %d %d", model.joints_.size(),
            model.links_.size());
@@ -114,10 +116,19 @@ bool CnoidRobotHW::init(ros::NodeHandle& root_nh, ros::NodeHandle &robot_hw_nh)/
     pj_interface_.registerHandle(joint_handle);
 
     joint_limits_interface::JointLimits limits;
-    const bool urdf_limits_ok = joint_limits_interface::getJointLimits(model.getJoint(jointname), limits);
-    if (!urdf_limits_ok) {
-      ROS_WARN("urdf limits of joint %s is not defined", jointname.c_str());
-    }
+    //const bool urdf_limits_ok = joint_limits_interface::getJointLimits(model.getJoint(jointname), limits);
+    //if (!urdf_limits_ok) {
+    //ROS_WARN("urdf limits of joint %s is not defined", jointname.c_str());
+    //}
+    limits.min_position = joint->q_upper();
+    limits.max_position = joint->q_lower();
+    limits.has_position_limits = true;
+    limits.max_velocity = joint->dq_upper();
+    limits.has_velocity_limits = true;
+    //limits.max_acceleration = ;
+    //limits.has_acceleration_limits = ;
+    //limits.max_effort = ;
+    //limits.has_effort_limits = ;
     // Register handle in joint limits interface
     joint_limits_interface::PositionJointSaturationHandle
       limits_handle(joint_handle, // We read the state and read/write the command

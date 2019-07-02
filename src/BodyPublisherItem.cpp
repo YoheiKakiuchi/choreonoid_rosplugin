@@ -27,6 +27,8 @@
 #include <cmath>
 #include <cstdlib>
 
+#include <boost/tokenizer.hpp>
+
 using namespace std;
 using namespace cnoid;
 
@@ -58,8 +60,9 @@ public:
     vector<ros::Publisher> points_cameraImagePublishers;
     /// Range
     
-    BodyNode(BodyItem* bodyItem, ControllerIO* io);
+    BodyNode(BodyItem* bodyItem);
 
+    void initialize(ControllerIO* io, std::vector<std::string> &option);
     void start(ControllerIO* io, double maxPublishRate);
     void input();    
     void control();    
@@ -180,8 +183,7 @@ void BodyPublisherItemImpl::setBodyItem(BodyItem* bodyItem, bool forceUpdate)
     }
     
     if(bodyItem && !bodyNode){
-        bodyNode.reset(new BodyNode(bodyItem, io));
-
+        bodyNode.reset(new BodyNode(bodyItem));
         bodyNode->connections.add(
             bodyItem->sigNameChanged().connect(
                 [&](const std::string& oldName){ setBodyItem(bodyItem, true); }));
@@ -204,6 +206,25 @@ double BodyPublisherItem::timeStep() const
 bool BodyPublisherItem::initialize(ControllerIO* io)
 {
     impl->io = io;
+
+    // Copy from ControllerIO
+    typedef boost::escaped_list_separator<char> separator;
+    separator sep('\\', ' ');
+
+    std::string s = optionString();
+    boost::tokenizer<separator> tok(s, sep);
+
+    std::vector<std::string> options;
+    for(boost::tokenizer<separator>::iterator p = tok.begin(); p != tok.end(); ++p){
+        const string& token = *p;
+        if(!token.empty()){
+            options.push_back(token);
+        }
+    }
+    //
+
+    impl->bodyNode->initialize(io, options);
+
     return true;
 }
 
@@ -243,12 +264,14 @@ void BodyPublisherItem::stop()
 
 void BodyPublisherItem::doPutProperties(PutPropertyFunction& putProperty)
 {
+    ControllerItem::doPutProperties(putProperty);
     putProperty(_("Max publish rate"), impl->maxPublishRate, changeProperty(impl->maxPublishRate));
 }
 
 
 bool BodyPublisherItem::store(Archive& archive)
 {
+    ControllerItem::store(archive);
     archive.write("maxPublishRate", impl->maxPublishRate);
     return true;
 }
@@ -256,12 +279,12 @@ bool BodyPublisherItem::store(Archive& archive)
 
 bool BodyPublisherItem::restore(const Archive& archive)
 {
+    ControllerItem::restore(archive);
     archive.read("maxPublishRate", impl->maxPublishRate);
     return true;
 }
 
-
-BodyNode::BodyNode(BodyItem* bodyItem, ControllerIO *io)
+BodyNode::BodyNode(BodyItem* bodyItem)
     : bodyItem(bodyItem),
       timeBar(TimeBar::instance())
 {
@@ -326,29 +349,33 @@ BodyNode::BodyNode(BodyItem* bodyItem, ControllerIO *io)
     publish_clock = false;
     clock_counter = 0;
     if (!published_clock) {
-      ROS_WARN("publish /clock");
       /// clock
       publish_clock = true;
       clock_pub = rosNode->advertise<rosgraph_msgs::Clock>("/clock", 5);
       /// trajectory
     }
 
-    //
+    cnoid_hw_ = NULL;
+}
+
+void BodyNode::initialize(ControllerIO* io, std::vector<std::string> &opt)
+{
+    if (cnoid_hw_ != NULL) return;
+
     cnoid_hw_ = new cnoid_robot_hardware::CnoidRobotHW();
     cnoid_hw_->cnoid_body = bodyItem->body();
-    //
+
     // option parse
     {
       int count = -1;
       //std::string option = io->optionString();
-      for(auto& option : io->options()) {
+      for(auto& option : opt) {
         count++;
-
         std::size_t ppos, pos;
         pos = option.find(':');
         if (pos == std::string::npos) continue;
         std::string nm (option, 0, pos);
-        std::cerr << "name: " << nm << std::endl;
+        //std::cerr << "name: " << nm << std::endl;
 
         cnoid::Link* joint = cnoid_hw_->cnoid_body->link(nm);
         if (!joint || joint->isFixedJoint()) continue;
@@ -363,7 +390,7 @@ BodyNode::BodyNode(BodyItem* bodyItem, ControllerIO *io)
         if (pos == std::string::npos) continue;
         std::string pgain (option, ppos+1, pos-ppos-1);
         if(pos-ppos-1 != 0) {
-          std::cerr << "pgain: " << std::atof(pgain.c_str()) << std::endl;
+          //std::cerr << "pgain: " << std::atof(pgain.c_str()) << std::endl;
           cnoid_hw_->p_gain[count] = std::atof(pgain.c_str());
         }
 
@@ -372,19 +399,18 @@ BodyNode::BodyNode(BodyItem* bodyItem, ControllerIO *io)
         if (pos == std::string::npos) continue;
         std::string igain (option, ppos+1, pos-ppos-1);
         if(pos-ppos-1 != 0) {
-          std::cerr << "igain: " << std::atof(igain.c_str()) << std::endl;
+          //std::cerr << "igain: " << std::atof(igain.c_str()) << std::endl;
           cnoid_hw_->i_gain[count] = std::atof(igain.c_str());
         }
 
         if(pos+1 == option.size()) continue;
         std::string dgain (option, pos+1);
         if(pos-ppos-1 != 0) {
-          std::cerr << "dgain: " << std::atof(dgain.c_str()) << std::endl;
+          //std::cerr << "dgain: " << std::atof(dgain.c_str()) << std::endl;
           cnoid_hw_->d_gain[count] = std::atof(dgain.c_str());
         }
       }
     }
-
     //ros::NodeHandle nh;
     ros::NodeHandle robot_nh("~");
     if (!cnoid_hw_->init(*rosNode, robot_nh)) {
@@ -393,7 +419,6 @@ BodyNode::BodyNode(BodyItem* bodyItem, ControllerIO *io)
     }
     ros_cm_ = new controller_manager::ControllerManager (cnoid_hw_, *rosNode);
 }
-
 
 void BodyNode::start(ControllerIO* io, double maxPublishRate)
 {

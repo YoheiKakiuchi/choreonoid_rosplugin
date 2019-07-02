@@ -77,7 +77,12 @@ public:
   std::vector<double> i_gain;
   std::vector<double> d_gain;
 
-  CnoidRobotHW() { }
+  CnoidRobotHW() {
+    use_joints.resize(0);
+    p_gain.resize(0);
+    i_gain.resize(0);
+    d_gain.resize(0);
+  }
 
   virtual ~CnoidRobotHW() {}
 
