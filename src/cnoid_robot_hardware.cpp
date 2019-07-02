@@ -70,17 +70,9 @@ bool CnoidRobotHW::init(ros::NodeHandle& root_nh, ros::NodeHandle &robot_hw_nh)/
                joint->second->name.c_str());
     }
 #endif
-#if 1
-  joint_list_.resize(0);
-  for(int i = 0; i < cnoid_body->numJoints(); ++i) {
-    cnoid::Link* joint = cnoid_body->joint(i);
-    if (!joint->isFixedJoint()) {
-      joint_list_.push_back(joint->name());
-    }
-  }
+
   // set number of angles from model
-  number_of_angles_ = joint_list_.size();
-#endif
+  number_of_angles_ = use_joints.size();
   // joint_names_.resize(number_of_angles_);
   joint_types_.resize(number_of_angles_);
   joint_lower_limits_.resize(number_of_angles_);
@@ -97,7 +89,7 @@ bool CnoidRobotHW::init(ros::NodeHandle& root_nh, ros::NodeHandle &robot_hw_nh)/
 
   // Initialize values
   for(unsigned int j = 0; j < number_of_angles_; j++) {
-    std::string jointname = joint_list_[j];
+    std::string jointname = use_joints[j];
     cnoid::Link* joint = cnoid_body->link(jointname);
     // Add data from transmission
     joint_position_[j]         = joint->q(); // initialize
@@ -107,7 +99,9 @@ bool CnoidRobotHW::init(ros::NodeHandle& root_nh, ros::NodeHandle &robot_hw_nh)/
     joint_effort_[j]           = joint->u();  // N/m for continuous joints
     joint_effort_command_[j]   = joint->u();
 
-    ROS_INFO("joint: %s / q: %f, dq: %f, u: %f", jointname.c_str(), joint->q(), joint->dq(), joint->u());
+    ROS_INFO("joint: %s / [initial] q: %f, dq: %f, u: %f / [gain] P: %f, D: %f",
+             jointname.c_str(), joint->q(), joint->dq(), joint->u(),
+             p_gain[j], d_gain[j]);
 
     // Create joint state interface for all joints
     js_interface_.registerHandle(hardware_interface::JointStateHandle(
@@ -143,8 +137,8 @@ bool CnoidRobotHW::init(ros::NodeHandle& root_nh, ros::NodeHandle &robot_hw_nh)/
 void CnoidRobotHW::read(const ros::Time& time, const ros::Duration& period)
 {
   // copy choreonoid body from ...
-  for(int i = 0; i < joint_list_.size(); ++i) {
-    cnoid::Link* joint = cnoid_body->link(joint_list_[i]);
+  for(int i = 0; i < use_joints.size(); ++i) {
+    cnoid::Link* joint = cnoid_body->link(use_joints[i]);
     joint_position_[i] = joint->q();
     joint_velocity_[i] = joint->dq();
     joint_effort_[i]   = joint->u();
@@ -160,38 +154,18 @@ void CnoidRobotHW::write(const ros::Time& time, const ros::Duration& period)
   // jaco:    6
   // hand:    3
   //ROS_INFO("tm: %f", time.toSec());
-  for(int i = 0; i < joint_list_.size(); ++i) {
-    cnoid::Link* joint = cnoid_body->link(joint_list_[i]);
+  for(int i = 0; i < use_joints.size(); ++i) {
+    cnoid::Link* joint = cnoid_body->link(use_joints[i]);
     double tq;
-    if (i < 4) {
-      tq = 8000*(joint_position_command_[i] - joint->q()) +
-        -80*joint->dq();
-    } else if (i < 10) {
-      tq = 2000*(joint_position_command_[i] - joint->q()) +
-        -20*joint->dq();
-    } else {
-      tq = 100*(joint_position_command_[i] - joint->q()) +
-        -5*joint->dq();
-    }
+    double pgain = p_gain[i];
+    //double igain = i_gain[i];
+    double dgain = d_gain[i];
+
+    tq = pgain*(joint_position_command_[i] - joint->q()) - dgain*joint->dq();
+
     //ROS_INFO("%f = %f %f %f", tq, joint_position_command_[i], joint->q(), joint->dq());
     joint->u() = tq;
     //joint->u() = 0.0;
-  }
-  return;
-}
-void CnoidRobotHW::dummy_write(const ros::Time& time, const ros::Duration& period)
-{
-  // write choreonoid body to ...
-  /// command ???
-  // flipper: 4
-  // jaco:    6
-  // hand:    3
-  //ROS_INFO("tm: %f", time.toSec());
-  for(int i = 0; i < joint_list_.size(); ++i) {
-    cnoid::Link* joint = cnoid_body->link(joint_list_[i]);
-    joint_position_command_[i] = joint->q();
-    //ROS_INFO("%f = %f %f %f", tq, joint_position_command_[i], joint->q(), joint->dq());
-    //joint->u() = tq;
   }
   return;
 }

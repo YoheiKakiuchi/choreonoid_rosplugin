@@ -72,6 +72,11 @@ public:
 
   cnoid::Body* cnoid_body;
 
+  std::vector<std::string> use_joints;
+  std::vector<double> p_gain;
+  std::vector<double> i_gain;
+  std::vector<double> d_gain;
+
   CnoidRobotHW() { }
 
   virtual ~CnoidRobotHW() {}
@@ -127,7 +132,6 @@ public:
    */
   virtual void write(const ros::Time& time, const ros::Duration& period);
 
-  void dummy_write(const ros::Time& time, const ros::Duration& period);
 protected:
   // Methods used to control a joint.
   enum ControlMethod {EFFORT, POSITION, POSITION_PID, VELOCITY, VELOCITY_PID};
@@ -148,7 +152,6 @@ protected:
   //joint_limits_interface::EffortJointSaturationInterface   ej_sat_interface_;
   //joint_limits_interface::EffortJointSoftLimitsInterface   ej_limits_interface_;
 
-  std::vector<std::string> joint_list_;
   std::vector<double> joint_lower_limits_;
   std::vector<double> joint_upper_limits_;
   std::vector<double> joint_effort_limits_;

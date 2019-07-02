@@ -25,6 +25,7 @@
 #include "rosgraph_msgs/Clock.h"
 #include "std_srvs/Empty.h"
 #include <cmath>
+#include <cstdlib>
 
 using namespace std;
 using namespace cnoid;
@@ -57,7 +58,7 @@ public:
     vector<ros::Publisher> points_cameraImagePublishers;
     /// Range
     
-    BodyNode(BodyItem* bodyItem);
+    BodyNode(BodyItem* bodyItem, ControllerIO* io);
 
     void start(ControllerIO* io, double maxPublishRate);
     void input();    
@@ -80,11 +81,6 @@ public:
     void publishGyro(int index);
     void publishAccel(int index);
 
-    //
-    bool use_trajectory_controller;
-    ros::ServiceServer control_toggle_service;
-    bool toggle_controller(std_srvs::Empty::Request& req,
-                           std_srvs::Empty::Response& res);
     //
     bool publish_clock;
     unsigned long clock_counter;
@@ -184,7 +180,7 @@ void BodyPublisherItemImpl::setBodyItem(BodyItem* bodyItem, bool forceUpdate)
     }
     
     if(bodyItem && !bodyNode){
-        bodyNode.reset(new BodyNode(bodyItem));
+        bodyNode.reset(new BodyNode(bodyItem, io));
 
         bodyNode->connections.add(
             bodyItem->sigNameChanged().connect(
@@ -265,7 +261,7 @@ bool BodyPublisherItem::restore(const Archive& archive)
 }
 
 
-BodyNode::BodyNode(BodyItem* bodyItem)
+BodyNode::BodyNode(BodyItem* bodyItem, ControllerIO *io)
     : bodyItem(bodyItem),
       timeBar(TimeBar::instance())
 {
@@ -336,12 +332,59 @@ BodyNode::BodyNode(BodyItem* bodyItem)
       clock_pub = rosNode->advertise<rosgraph_msgs::Clock>("/clock", 5);
       /// trajectory
     }
-    use_trajectory_controller = true;
-    control_toggle_service = rosNode->advertiseService("toggle_controller",
-                                                       &BodyNode::toggle_controller, this);
 
+    //
     cnoid_hw_ = new cnoid_robot_hardware::CnoidRobotHW();
     cnoid_hw_->cnoid_body = bodyItem->body();
+    //
+    // option parse
+    {
+      int count = -1;
+      //std::string option = io->optionString();
+      for(auto& option : io->options()) {
+        count++;
+
+        std::size_t ppos, pos;
+        pos = option.find(':');
+        if (pos == std::string::npos) continue;
+        std::string nm (option, 0, pos);
+        std::cerr << "name: " << nm << std::endl;
+
+        cnoid::Link* joint = cnoid_hw_->cnoid_body->link(nm);
+        if (!joint || joint->isFixedJoint()) continue;
+
+        cnoid_hw_->use_joints.push_back(nm);
+        cnoid_hw_->p_gain.push_back(0.0);
+        cnoid_hw_->i_gain.push_back(0.0);
+        cnoid_hw_->d_gain.push_back(0.0);
+
+        ppos = pos;
+        pos = option.find(':', ppos+1);
+        if (pos == std::string::npos) continue;
+        std::string pgain (option, ppos+1, pos-ppos-1);
+        if(pos-ppos-1 != 0) {
+          std::cerr << "pgain: " << std::atof(pgain.c_str()) << std::endl;
+          cnoid_hw_->p_gain[count] = std::atof(pgain.c_str());
+        }
+
+        ppos = pos;
+        pos = option.find(':', ppos+1);
+        if (pos == std::string::npos) continue;
+        std::string igain (option, ppos+1, pos-ppos-1);
+        if(pos-ppos-1 != 0) {
+          std::cerr << "igain: " << std::atof(igain.c_str()) << std::endl;
+          cnoid_hw_->i_gain[count] = std::atof(igain.c_str());
+        }
+
+        if(pos+1 == option.size()) continue;
+        std::string dgain (option, pos+1);
+        if(pos-ppos-1 != 0) {
+          std::cerr << "dgain: " << std::atof(dgain.c_str()) << std::endl;
+          cnoid_hw_->d_gain[count] = std::atof(dgain.c_str());
+        }
+      }
+    }
+
     //ros::NodeHandle nh;
     ros::NodeHandle robot_nh("~");
     if (!cnoid_hw_->init(*rosNode, robot_nh)) {
@@ -436,12 +479,8 @@ void BodyNode::control()
     // read q from choreonoid
     ros_cm_->update(now, period);
 
-    if (use_trajectory_controller) {
-      // write tau to choreonoid
-      cnoid_hw_->write(now, period);
-    } else {
-      cnoid_hw_->dummy_write(now, period);
-    }
+    // write tau to choreonoid
+    cnoid_hw_->write(now, period);
 
     clock_counter++;
 }
@@ -640,18 +679,4 @@ void BodyNode::publishAccel(int index)
   msg.linear_acceleration.z = accel->dv()[2];
 
   accelPublishers[index].publish(msg);
-}
-
-bool BodyNode::toggle_controller(std_srvs::Empty::Request& req,
-                                 std_srvs::Empty::Response& res)
-{
-  bool now = !use_trajectory_controller;
-  use_trajectory_controller = now;
-  if (use_trajectory_controller) {
-    ROS_ERROR("start trajectory controller");
-  } else {
-    ROS_ERROR("stop trajectory controller");
-  }
-
-  return true;
 }
