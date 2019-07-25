@@ -11,7 +11,6 @@
 #include <cnoid/Archive>
 #include <cnoid/ConnectionSet>
 #include <ros/node_handle.h>
-#include <sensor_msgs/JointState.h>
 #include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/Imu.h>
@@ -51,14 +50,13 @@ public:
     double minPublishCycle;
     double timeStep;
     
-    ros::Publisher jointStatePublisher;
-    sensor_msgs::JointState jointState;
+    ros::Publisher posePublisher;
 
     DeviceList<Camera> cameras;
     vector<image_transport::Publisher> cameraImagePublishers;
     DeviceList<RangeCamera> depth_cameras;
     vector<ros::Publisher> points_cameraImagePublishers;
-    /// Range
+    /// TODO: Range, FishEye
     
     BodyNode(BodyItem* bodyItem);
 
@@ -68,11 +66,11 @@ public:
     void control();    
     void output();    
     void stop();    
-    
+
     void startToPublishKinematicStateChangeOnGUI();
     void stopToPublishKinematicStateChangeOnGUI();
-    void initializeJointState(Body* body);
-    void publishJointState(Body* body, double time);
+
+    void publishPose(Body* body, double time);
     void publishCameraImage(int index);
     void createCameraImage(Camera *camera, sensor_msgs::Image &image);
     void createCameraImageDepth(RangeCamera *camera, sensor_msgs::PointCloud2 &points);
@@ -83,6 +81,7 @@ public:
     vector<ros::Publisher> accelPublishers;
     void publishGyro(int index);
     void publishAccel(int index);
+    // TODO: force
 
     //
     bool publish_clock;
@@ -293,8 +292,7 @@ BodyNode::BodyNode(BodyItem* bodyItem)
 
     rosNode.reset(new ros::NodeHandle(name));
 
-    //jointStatePublisher = rosNode->advertise<sensor_msgs::JointState>("orig_joint_state", 1000);
-    jointStatePublisher = rosNode->advertise<geometry_msgs::PoseStamped>("ground_truth_pose", 1000);
+    posePublisher = rosNode->advertise<geometry_msgs::PoseStamped>("ground_truth_pose", 1000);
     startToPublishKinematicStateChangeOnGUI();
 
     auto body = bodyItem->body();
@@ -373,12 +371,18 @@ void BodyNode::initialize(ControllerIO* io, std::vector<std::string> &opt)
         count++;
         std::size_t ppos, pos;
         pos = option.find(':');
-        if (pos == std::string::npos) continue;
+        if (pos == std::string::npos) {
+          //
+          continue;
+        }
         std::string nm (option, 0, pos);
         //std::cerr << "name: " << nm << std::endl;
 
         cnoid::Link* joint = cnoid_hw_->cnoid_body->link(nm);
-        if (!joint || joint->isFixedJoint()) continue;
+        if (!joint || joint->isFixedJoint()) {
+          //
+          continue;
+        }
 
         cnoid_hw_->use_joints.push_back(nm);
         cnoid_hw_->p_gain.push_back(0.0);
@@ -387,7 +391,10 @@ void BodyNode::initialize(ControllerIO* io, std::vector<std::string> &opt)
 
         ppos = pos;
         pos = option.find(':', ppos+1);
-        if (pos == std::string::npos) continue;
+        if (pos == std::string::npos) {
+          //
+          continue;
+        }
         std::string pgain (option, ppos+1, pos-ppos-1);
         if(pos-ppos-1 != 0) {
           //std::cerr << "pgain: " << std::atof(pgain.c_str()) << std::endl;
@@ -396,14 +403,20 @@ void BodyNode::initialize(ControllerIO* io, std::vector<std::string> &opt)
 
         ppos = pos;
         pos = option.find(':', ppos+1);
-        if (pos == std::string::npos) continue;
+        if (pos == std::string::npos) {
+          //
+          continue;
+        }
         std::string igain (option, ppos+1, pos-ppos-1);
         if(pos-ppos-1 != 0) {
           //std::cerr << "igain: " << std::atof(igain.c_str()) << std::endl;
           cnoid_hw_->i_gain[count] = std::atof(igain.c_str());
         }
 
-        if(pos+1 == option.size()) continue;
+        if(pos+1 == option.size()) {
+          //
+          continue;
+        }
         std::string dgain (option, pos+1);
         if(pos-ppos-1 != 0) {
           //std::cerr << "dgain: " << std::atof(dgain.c_str()) << std::endl;
@@ -431,7 +444,6 @@ void BodyNode::start(ControllerIO* io, double maxPublishRate)
     timeStep = io->timeStep();
 
     stopToPublishKinematicStateChangeOnGUI();
-    initializeJointState(ioBody);
 
     sensorConnections.disconnect();
     DeviceList<> devices = ioBody->devices();
@@ -480,7 +492,7 @@ void BodyNode::input()
 {
     timeToPublishNext += timeStep;
     if(timeToPublishNext > minPublishCycle){
-        publishJointState(ioBody, time);
+        publishPose(ioBody, time);
         timeToPublishNext -= minPublishCycle;
     }
 }
@@ -526,13 +538,12 @@ void BodyNode::stop()
 
 void BodyNode::startToPublishKinematicStateChangeOnGUI()
 {
-    if(jointStatePublisher){
+    if(posePublisher){
         auto body = bodyItem->body();
-        initializeJointState(body);
-        publishJointState(body, timeBar->time());
+        publishPose(body, timeBar->time());
         connectionOfKinematicStateChange.reset(
             bodyItem->sigKinematicStateChanged().connect(
-                [&](){ publishJointState(bodyItem->body(), timeBar->time()); }));
+                [&](){ publishPose(bodyItem->body(), timeBar->time()); }));
     }
 }
 
@@ -542,21 +553,7 @@ void BodyNode::stopToPublishKinematicStateChangeOnGUI()
     connectionOfKinematicStateChange.disconnect();
 }
 
-        
-void BodyNode::initializeJointState(Body* body)
-{
-    const int n = body->numJoints();
-    jointState.name.resize(n);
-    jointState.position.resize(n);
-    jointState.velocity.resize(n);
-    jointState.effort.resize(n);
-    for(int i=0; i < n; ++i){
-        jointState.name[i] = body->joint(i)->name();
-    }
-}
-    
-
-void BodyNode::publishJointState(Body* body, double time)
+void BodyNode::publishPose(Body* body, double time)
 {
   geometry_msgs::PoseStamped pose;
   pose.header.stamp.fromSec(time);
@@ -573,19 +570,7 @@ void BodyNode::publishJointState(Body* body, double time)
   pose.pose.orientation.z = quat.z();
   pose.pose.orientation.w = quat.w();
 
-  jointStatePublisher.publish(pose);
-#if 0
-    jointState.header.stamp.fromSec(time);
-
-    for(int i=0; i < body->numJoints(); ++i){
-        Link* joint = body->joint(i);
-        jointState.position[i] = joint->q();
-        jointState.velocity[i] = joint->dq();
-        jointState.effort[i] = joint->u();
-    }
-
-    jointStatePublisher.publish(jointState);
-#endif
+  posePublisher.publish(pose);
 }
 
 void BodyNode::publishCameraImage(int index)

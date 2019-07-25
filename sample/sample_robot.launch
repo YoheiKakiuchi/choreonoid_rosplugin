@@ -1,0 +1,61 @@
+<launch>
+  <arg name="ROBOT" default="SR1" />
+  <param name="/use_sim_time" value="true" />
+
+  <group ns="$(arg ROBOT)">
+    <rosparam>
+      joint_state_controller:
+        type: joint_state_controller/JointStateController
+        publish_rate: 50
+      fullbody_controller:
+        type: position_controllers/JointTrajectoryController
+        joints:
+          - RLEG_HIP_R
+          - RLEG_HIP_P
+          - RLEG_HIP_Y
+          - RLEG_KNEE
+          - RLEG_ANKLE_P
+          - RLEG_ANKLE_R
+          - LLEG_HIP_R
+          - LLEG_HIP_P
+          - LLEG_HIP_Y
+          - LLEG_KNEE
+          - LLEG_ANKLE_P
+          - LLEG_ANKLE_R
+          - RARM_SHOULDER_P
+          - RARM_SHOULDER_R
+          - RARM_SHOULDER_Y
+          - RARM_ELBOW
+          - RARM_WRIST_Y
+          - RARM_WRIST_P
+          - RARM_WRIST_R
+          - LARM_SHOULDER_P
+          - LARM_SHOULDER_R
+          - LARM_SHOULDER_Y
+          - LARM_ELBOW
+          - LARM_WRIST_Y
+          - LARM_WRIST_P
+          - LARM_WRIST_R
+          - WAIST_P
+          - WAIST_R
+          - CHEST
+    </rosparam>
+
+    <!-- How to build sample_robot.urdf?? -->
+    <param name="robot_description"
+           textfile="$(find choreonoid_rosplugin)/sample/sample_robot.urdf" />
+
+    <node name="$(anon cm_spawner)" pkg="controller_manager"
+          type="spawner" args="joint_state_controller
+                               fullbody_controller" />
+
+    <node name="robot_state_publisher_kxr" pkg="robot_state_publisher"
+          type="state_publisher">
+      <!--param name="tf_prefix" value="$(arg ROBOT)" /-->
+    </node>
+  </group>
+
+  <node name="choreonoid" pkg="choreonoid_rosplugin" type="run_cnoid.sh"
+        args="$(find choreonoid_rosplugin)/sample/sample_robot.cnoid --start-simulation" />
+
+</launch>
