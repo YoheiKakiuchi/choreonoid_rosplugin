@@ -10,6 +10,10 @@
 #include <cnoid/TimeBar>
 #include <cnoid/Archive>
 #include <cnoid/ConnectionSet>
+#include <cnoid/MeshExtractor>
+#include <cnoid/SceneDrawables>
+
+// ROS
 #include <ros/node_handle.h>
 #include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -32,6 +36,11 @@ using namespace std;
 using namespace cnoid;
 
 namespace {
+
+// mesh extractor
+struct Triangle {
+  int indices[3];
+};
 
 class BodyNode
 {
@@ -90,6 +99,10 @@ public:
     // ros control
     cnoid_robot_hardware::CnoidRobotHW *cnoid_hw_;
     controller_manager::ControllerManager *ros_cm_;
+
+    void addMesh(MeshExtractor* extractor,
+                 std::vector<Vector3> &vertices,
+                 std::vector<Triangle> &triangles);
 };
 
 }
@@ -430,7 +443,206 @@ void BodyNode::initialize(ControllerIO* io, std::vector<std::string> &opt)
       ROS_ERROR("Faild to initialize hardware");
       //exit(1);
     }
+    // parse robot
+    {
+      std::cerr << "parse" << std::endl;
+      // to stream...
+      Body *b = bodyItem->body();
+      std::vector<double> qvec(b->numJoints());
+      for (int idx = 0; idx < b->numJoints(); idx++) {
+        Link *jt = b->joint(idx);
+        qvec[idx] = jt->q();
+        jt->q() = 0;
+      }
+      b->updateLinkTree();
+
+      // dump links
+      for (int idx = 0; idx < b->numLinks(); idx++) {
+        Link *lk = b->link(idx);
+        lk->name();
+        // mass
+        lk->mass();
+        lk->centerOfMass();
+        // inertia tensor (self local, around c)
+        lk->I();
+
+        // shape
+        lk->visualShape();
+        lk->collisionShape();
+        if (lk->collisionShape()) {
+          std::cerr << "collision!!" << std::endl;
+          //
+          MeshExtractor* extractor = new MeshExtractor;
+          std::vector<Vector3> vertices;
+          std::vector<Triangle> triangles;
+          if(extractor->extract(lk->collisionShape(),
+                                [&]() { addMesh(extractor, vertices, triangles); } )) {
+            //
+          }
+          delete extractor;
+        }
+      }
+      // dump joints
+      for (int idx = 0; idx < b->numLinks(); idx++) {
+        Link *lk = b->link(idx);
+        if (lk->isRoot()) {
+          //
+          continue;
+        }
+        Link *plk = lk->parent();
+        if (!plk) {
+          //
+          continue;
+        }
+        Position pT = plk->position();
+        Position cT = lk->position();
+
+        lk->jointAxis();
+        lk->jointType();
+
+        lk->q_initial();
+        lk->q_upper();
+        lk->q_lower();
+        lk->dq_upper();
+        lk->dq_lower();
+      }
+
+      for (int idx=0; idx < b->numJoints(); idx++) {
+        b->joint(idx)->q() = qvec[idx];
+      }
+      b->updateLinkTree();
+    }
+    //
     ros_cm_ = new controller_manager::ControllerManager (cnoid_hw_, *rosNode);
+}
+
+void BodyNode::addMesh(MeshExtractor* extractor,std::vector<Vector3> &vertices,
+                       std::vector<Triangle> &triangles)
+{
+  SgMesh* mesh = extractor->currentMesh();
+  const Affine3& T = extractor->currentTransform();
+  {
+    std::cerr << "  currentT: ";
+    Vector3 v(T.translation());
+    Quaternion q = Quaternion(T.linear());
+    std::cerr << v.x() << ", " << v.y() << ", " << v.z() << " / "
+              << q.w() << ", " << q.x() << ", " << q.y() << ", " << q.z() << std::endl;
+  }
+  bool meshAdded = false;
+
+  if(mesh->primitiveType() != SgMesh::MESH) {
+    std::cerr << "  not mesh!" << std::endl;
+    bool doAddPrimitive = false;
+    Vector3 scale;
+    boost::optional<Vector3> translation;
+    // scale
+    if(!extractor->isCurrentScaled()){
+      scale.setOnes();
+      doAddPrimitive = true;
+    } else {
+      std::cerr << "    scaled!" << std::endl;
+      Affine3 S = extractor->currentTransformWithoutScaling().inverse() *
+        extractor->currentTransform();
+
+      if(S.linear().isDiagonal()){
+        if(!S.translation().isZero()){
+          translation = S.translation();
+        }
+        scale = S.linear().diagonal();
+        if(mesh->primitiveType() == SgMesh::BOX){
+          doAddPrimitive = true;
+        } else if(mesh->primitiveType() == SgMesh::SPHERE){
+          // check if the sphere is uniformly scaled for all the axes
+          if(scale.x() == scale.y() && scale.x() == scale.z()){
+            doAddPrimitive = true;
+          }
+        } else if(mesh->primitiveType() == SgMesh::CYLINDER ||
+                  mesh->primitiveType() == SgMesh::CAPSULE ){
+          // check if the bottom circle face is uniformly scaled
+          if(scale.x() == scale.z()){
+            doAddPrimitive = true;
+          }
+        }
+      }
+      //std::cerr << "    scaled!" << std::endl;
+    }
+
+    if (doAddPrimitive) {
+      bool created = false;
+      switch(mesh->primitiveType()){
+      case SgMesh::BOX : {
+        const Vector3& s = mesh->primitive<SgMesh::Box>().size;
+        std::cerr << "   -> box" << std::endl;
+        created = true;
+        break; }
+      case SgMesh::SPHERE : {
+        SgMesh::Sphere sphere = mesh->primitive<SgMesh::Sphere>();
+        //sphere.radius * scale.x()
+        std::cerr << "   -> sphere" << std::endl;
+        created = true;
+        break; }
+      case SgMesh::CYLINDER : {
+        SgMesh::Cylinder cylinder = mesh->primitive<SgMesh::Cylinder>();
+        //cylinder.radius * scale.x(), cylinder.height * scale.y()
+        std::cerr << "   -> cylinder" << std::endl;
+        created = true;
+        break; }
+      case SgMesh::CAPSULE : {
+        SgMesh::Capsule capsule = mesh->primitive<SgMesh::Capsule>();
+        //capsule.radius * scale.x(), capsule.height * scale.y()
+        std::cerr << "   -> capsule" << std::endl;
+        created = true;
+        break; }
+      default :
+        break;
+      }
+      if (created) {
+#if 0
+        Affine3 T_ = extractor->currentTransformWithoutScaling();
+        if(translation) {
+          T_ *= Translation3(*translation);
+        }
+        if(mesh->primitiveType()==SgMesh::CYLINDER ||
+           mesh->primitiveType()==SgMesh::CAPSULE )
+          T_ *= AngleAxis(radian(90), Vector3::UnitX());
+        Vector3 p = T_.translation() - link->c();
+        dMatrix3 R = { T_(0,0), T_(0,1), T_(0,2), 0.0,
+                       T_(1,0), T_(1,1), T_(1,2), 0.0,
+                       T_(2,0), T_(2,1), T_(2,2), 0.0 };
+#endif
+        meshAdded = true;
+      } // if (created)
+    }
+  } // if(mesh->primitiveType() != SgMesh::MESH) {
+  if( !meshAdded ) {
+    std::cerr << "  mesh!" << std::endl;
+    const int vertexIndexTop  =  vertices.size();
+    const SgVertexArray& vertices_ = *mesh->vertices();
+    const int numVertices = vertices_.size();
+
+    for(int i = 0; i < numVertices; ++i) {
+      //const Vector3 v = T * vertices_[i].cast<Position::Scalar>() - link->c();
+      const Vector3 v = T * vertices_[i].cast<Position::Scalar>();
+      vertices.push_back(Vector3(v.x(), v.y(), v.z()));
+      std::cerr << "   vtc[" << i + vertexIndexTop << "]: "
+                << v.x() << ", "
+                << v.y() << ", "
+                << v.z() << std::endl;
+    }
+
+    const int numTriangles = mesh->numTriangles();
+    for(int i = 0; i < numTriangles; ++i) {
+      SgMesh::TriangleRef src = mesh->triangle(i);
+      Triangle tri;
+      tri.indices[0] = vertexIndexTop + src[0];
+      tri.indices[1] = vertexIndexTop + src[1];
+      tri.indices[2] = vertexIndexTop + src[2];
+      triangles.push_back(tri);
+      std::cerr << "   idx: " <<  tri.indices[0] << " "
+                << tri.indices[1] << " "
+                << tri.indices[2] << std::endl;
+    }
+  }
 }
 
 void BodyNode::start(ControllerIO* io, double maxPublishRate)
