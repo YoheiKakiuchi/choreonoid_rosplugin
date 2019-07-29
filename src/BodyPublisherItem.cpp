@@ -443,76 +443,7 @@ void BodyNode::initialize(ControllerIO* io, std::vector<std::string> &opt)
       ROS_ERROR("Faild to initialize hardware");
       //exit(1);
     }
-    // parse robot
-    {
-      std::cerr << "parse" << std::endl;
-      // to stream...
-      Body *b = bodyItem->body();
-      std::vector<double> qvec(b->numJoints());
-      for (int idx = 0; idx < b->numJoints(); idx++) {
-        Link *jt = b->joint(idx);
-        qvec[idx] = jt->q();
-        jt->q() = 0;
-      }
-      b->updateLinkTree();
 
-      // dump links
-      for (int idx = 0; idx < b->numLinks(); idx++) {
-        Link *lk = b->link(idx);
-        lk->name();
-        // mass
-        lk->mass();
-        lk->centerOfMass();
-        // inertia tensor (self local, around c)
-        lk->I();
-
-        // shape
-        lk->visualShape();
-        lk->collisionShape();
-        if (lk->collisionShape()) {
-          std::cerr << "collision!!" << std::endl;
-          //
-          MeshExtractor* extractor = new MeshExtractor;
-          std::vector<Vector3> vertices;
-          std::vector<Triangle> triangles;
-          if(extractor->extract(lk->collisionShape(),
-                                [&]() { addMesh(extractor, vertices, triangles); } )) {
-            //
-          }
-          delete extractor;
-        }
-      }
-      // dump joints
-      for (int idx = 0; idx < b->numLinks(); idx++) {
-        Link *lk = b->link(idx);
-        if (lk->isRoot()) {
-          //
-          continue;
-        }
-        Link *plk = lk->parent();
-        if (!plk) {
-          //
-          continue;
-        }
-        Position pT = plk->position();
-        Position cT = lk->position();
-
-        lk->jointAxis();
-        lk->jointType();
-
-        lk->q_initial();
-        lk->q_upper();
-        lk->q_lower();
-        lk->dq_upper();
-        lk->dq_lower();
-      }
-
-      for (int idx=0; idx < b->numJoints(); idx++) {
-        b->joint(idx)->q() = qvec[idx];
-      }
-      b->updateLinkTree();
-    }
-    //
     ros_cm_ = new controller_manager::ControllerManager (cnoid_hw_, *rosNode);
 }
 

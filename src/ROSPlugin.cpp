@@ -57,7 +57,7 @@ bool ROSPlugin::initialize()
   spinTimer.start(1.0);
 
   BodyPublisherItem::initialize(this);
-
+  URDFSaveItem::initialize(this);
   //// initialize ros service ...
   return true;
 }

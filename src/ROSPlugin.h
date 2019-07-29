@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BodyPublisherItem.h"
+#include "URDFSaveItem.h"
 //
 #include <cnoid/Plugin>
 #include <cnoid/MessageView>
