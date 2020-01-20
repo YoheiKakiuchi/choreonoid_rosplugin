@@ -49,7 +49,7 @@ public:
     double timeToPublishNext;
     double minPublishCycle;
     double timeStep;
-    
+
     ros::Publisher posePublisher;
 
     DeviceList<Camera> cameras;
@@ -57,7 +57,7 @@ public:
     DeviceList<RangeCamera> depth_cameras;
     vector<ros::Publisher> points_cameraImagePublishers;
     /// TODO: Range, FishEye
-    
+
     BodyNode(BodyItem* bodyItem);
 
     void initialize(ControllerIO* io, std::vector<std::string> &option);
@@ -103,14 +103,12 @@ public:
     unique_ptr<BodyNode> bodyNode;
     ControllerIO* io;
     double maxPublishRate;
-    
+
     BodyPublisherItemImpl(BodyPublisherItem* self);
     BodyPublisherItemImpl(BodyPublisherItem* self, const BodyPublisherItemImpl& org);
     ~BodyPublisherItemImpl();
     void setBodyItem(BodyItem* bodyItem, bool forceUpdate);
 };
-
-}
 
 
 void BodyPublisherItem::initialize(ExtensionManager* ext)
@@ -139,7 +137,7 @@ BodyPublisherItem::BodyPublisherItem(const BodyPublisherItem& org)
 {
     impl = new BodyPublisherItemImpl(this, *org.impl);
 }
-    
+
 
 BodyPublisherItemImpl::BodyPublisherItemImpl(BodyPublisherItem* self, const BodyPublisherItemImpl& org)
     : self(self)
@@ -160,7 +158,6 @@ BodyPublisherItemImpl::~BodyPublisherItemImpl()
 
 }
 
-
 Item* BodyPublisherItem::doDuplicate() const
 {
     return new BodyPublisherItem(*this);
@@ -180,7 +177,6 @@ void BodyPublisherItemImpl::setBodyItem(BodyItem* bodyItem, bool forceUpdate)
             bodyNode.reset();
         }
     }
-    
     if(bodyItem && !bodyNode){
         bodyNode.reset(new BodyNode(bodyItem));
         bodyNode->connections.add(
@@ -282,6 +278,8 @@ bool BodyPublisherItem::restore(const Archive& archive)
     archive.read("maxPublishRate", impl->maxPublishRate);
     return true;
 }
+
+} // cnoid
 
 BodyNode::BodyNode(BodyItem* bodyItem)
     : bodyItem(bodyItem),

@@ -2,6 +2,7 @@
 #define CNOID_ROS_PLUGIN_BODY_PUBLISHER_ITEM_H
 
 #include <cnoid/ControllerItem>
+#include <cnoid/PutPropertyFunction>
 #include "exportdecl.h"
 
 namespace cnoid {
