@@ -25,13 +25,13 @@ public:
     virtual bool control() override;
     virtual void output() override;
     virtual void stop() override;
-    
+
 protected:
     virtual Item* doDuplicate() const override;
 
     virtual void onPositionChanged() override;
     virtual void onDisconnectedFromRoot() override;
-    
+
     virtual void doPutProperties(PutPropertyFunction& putProperty) override;
     virtual bool store(Archive& archive) override;
     virtual bool restore(const Archive& archive) override;
