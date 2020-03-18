@@ -5,7 +5,7 @@ cnoid_make_gettext_mofiles(${target} mofiles)
 add_cnoid_plugin(${target} SHARED
   ROSPlugin.cpp
   BodyPublisherItem.cpp
-  cnoid_robot_hardware.cpp
+  #cnoid_robot_hardware.cpp
   ${mofiles}
   )
 

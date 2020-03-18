@@ -17,14 +17,14 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   image_transport
   choreonoid
-  realtime_tools
-  control_toolbox
-  controller_manager
-  hardware_interface
-  transmission_interface
-  joint_limits_interface
-  joint_trajectory_controller
-  joint_state_controller
+  #realtime_tools
+  #control_toolbox
+  #controller_manager
+  #hardware_interface
+  #transmission_interface
+  #joint_limits_interface
+  #joint_trajectory_controller
+  #joint_state_controller
   angles
   pluginlib
   urdf
