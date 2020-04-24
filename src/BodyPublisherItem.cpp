@@ -637,7 +637,8 @@ void BodyNode::createCameraImageDepth(RangeCamera *camera, sensor_msgs::PointClo
 {
   //sensor_msgs::PointCloud2 range;
   points.header.stamp.fromSec(time);
-  points.header.frame_id = name + "/" + camera->name();
+  //points.header.frame_id = name + "/" + camera->name();
+  points.header.frame_id = camera->name(); // not using robot namespace
   points.width  = camera->resolutionX();
   points.height = camera->resolutionY();
   points.is_bigendian = false;
@@ -692,7 +693,8 @@ void BodyNode::createCameraImageDepth(RangeCamera *camera, sensor_msgs::PointClo
 void BodyNode::createCameraImage(Camera *camera, sensor_msgs::Image &image)
 {
     image.header.stamp.fromSec(time);
-    image.header.frame_id = name + "/" + camera->name();
+    //image.header.frame_id = name + "/" + camera->name();
+    image.header.frame_id = camera->name(); // not using robot namespace
     image.height = camera->image().height();
     image.width  = camera->image().width();
     if(camera->image().numComponents() == 3){
